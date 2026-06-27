@@ -1,3 +1,5 @@
+<img width="1254" height="1254" alt="physique_logo" src="https://github.com/user-attachments/assets/fbc56772-23cb-4f0e-a764-7b02ef945b3a" />
+
 # Physique
 
 A personal health and fitness tracker designed to manage workouts, nutrition, body measurements, progress photos, and medical records in one place.
