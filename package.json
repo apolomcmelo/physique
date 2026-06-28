@@ -1,0 +1,78 @@
+{
+    "name": "physique",
+    "version": "1.0.0",
+    "main": "expo-router/entry",
+    "scripts": {
+        "start": "expo start",
+        "android": "expo start --android",
+        "ios": "expo start --ios",
+        "web": "expo start --web",
+        "test": "jest --watchAll=false",
+        "test:watch": "jest --watchAll",
+        "test:coverage": "jest --coverage",
+        "test:domain": "jest --config jest.domain.config.js --no-coverage"
+    },
+    "dependencies": {
+        "@babel/types": "^7.29.7",
+        "@expo/metro-runtime": "~4.0.1",
+        "@expo/vector-icons": "~14.0.4",
+        "@opentelemetry/api": "^1.9.1",
+        "@react-native-async-storage/async-storage": "1.23.1",
+        "@supabase/supabase-js": "^2.45.4",
+        "base64-arraybuffer": "^1.0.2",
+        "expo": "~52.0.46",
+        "expo-asset": "~11.0.5",
+        "expo-av": "~15.0.2",
+        "expo-camera": "~16.0.18",
+        "expo-constants": "~17.0.8",
+        "expo-device": "~7.0.3",
+        "expo-document-picker": "~13.0.3",
+        "expo-file-system": "~18.0.12",
+        "expo-font": "~13.0.4",
+        "expo-image-picker": "~16.0.6",
+        "expo-keep-awake": "~14.0.3",
+        "expo-linking": "~7.0.5",
+        "expo-location": "~18.0.10",
+        "expo-modules-autolinking": "^2.0.8",
+        "expo-modules-core": "^2.2.3",
+        "expo-notifications": "~0.29.14",
+        "expo-router": "~4.0.17",
+        "expo-sensors": "~14.0.2",
+        "expo-splash-screen": "~0.29.22",
+        "expo-status-bar": "~2.0.1",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "react-native": "0.76.9",
+        "react-native-safe-area-context": "4.12.0",
+        "react-native-screens": "~4.4.0",
+        "react-native-url-polyfill": "^2.0.0",
+        "react-native-web": "~0.19.13",
+        "tesseract.js": "^5.1.0"
+    },
+    "devDependencies": {
+        "@babel/core": "^7.25.2",
+        "@testing-library/jest-native": "^5.4.3",
+        "@testing-library/react-native": "^12.4.0",
+        "@types/jest": "^29.5.14",
+        "@types/react": "~18.3.12",
+        "ajv": "^8.20.0",
+        "babel-plugin-module-resolver": "^5.0.2",
+        "babel-preset-expo": "12.0.12",
+        "jest": "^29.7.0",
+        "jest-expo": "~52.0.6",
+        "metro": "^0.81.5",
+        "metro-config": "^0.81.5",
+        "ts-jest": "^29.2.6",
+        "typescript": "^5.3.3"
+    },
+    "jest": {
+        "preset": "jest-expo",
+        "setupFilesAfterFramework": [
+            "@testing-library/jest-native/extend-expect"
+        ],
+        "transformIgnorePatterns": [
+            "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)"
+        ]
+    },
+    "private": true
+}
