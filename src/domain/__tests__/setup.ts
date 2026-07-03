@@ -7,7 +7,7 @@ import { WeightRecord } from '../entities/WeightRecord';
 export const mockUser: User = {
     id: 'user-1',
     name: 'John Doe',
-    age: 30,
+    dateOfBirth: new Date(new Date().getFullYear() - 30, 0, 1),
     height: 180,
     currentWeight: 80,
     goalWeight: 75,

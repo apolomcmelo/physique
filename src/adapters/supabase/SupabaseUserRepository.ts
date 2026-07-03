@@ -5,7 +5,7 @@ import { supabase } from '../../infrastructure/supabase/client';
 interface UserProfileRow {
     id: string;
     name: string;
-    age: number;
+    date_of_birth: string;
     height_cm: number;
     current_weight_kg: number;
     goal_weight_kg: number;
@@ -20,7 +20,7 @@ function rowToUser(row: UserProfileRow): User {
     return {
         id: row.id,
         name: row.name,
-        age: row.age,
+        dateOfBirth: new Date(row.date_of_birth),
         height: row.height_cm,
         currentWeight: row.current_weight_kg,
         goalWeight: row.goal_weight_kg,
@@ -36,7 +36,7 @@ function userToRow(user: User): Omit<UserProfileRow, 'created_at' | 'updated_at'
     return {
         id: user.id,
         name: user.name,
-        age: user.age,
+        date_of_birth: user.dateOfBirth.toISOString().split('T')[0],
         height_cm: user.height,
         current_weight_kg: user.currentWeight,
         goal_weight_kg: user.goalWeight,

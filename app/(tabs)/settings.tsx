@@ -36,7 +36,7 @@ export default function SettingsScreen() {
 
     // Profile form
     const [name, setName] = useState('');
-    const [age, setAge] = useState('');
+    const [dateOfBirth, setDateOfBirth] = useState(''); // DD/MM/AAAA
     const [height, setHeight] = useState('');
     const [currentWeight, setCurrentWeight] = useState('');
     const [goalWeight, setGoalWeight] = useState('');
@@ -63,7 +63,11 @@ export default function SettingsScreen() {
             if (u) {
                 setUser(u);
                 setName(u.name);
-                setAge(String(u.age));
+                const d = u.dateOfBirth;
+                const dd = String(d.getDate()).padStart(2, '0');
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const yyyy = String(d.getFullYear());
+                setDateOfBirth(`${dd}/${mm}/${yyyy}`);
                 setHeight(String(u.height));
                 setCurrentWeight(String(u.currentWeight));
                 setGoalWeight(String(u.goalWeight));
@@ -79,8 +83,14 @@ export default function SettingsScreen() {
     }
 
     async function handleSaveProfile() {
-        if (!name.trim() || !age || !height || !currentWeight || !goalWeight || !objective.trim()) {
+        if (!name.trim() || !dateOfBirth || !height || !currentWeight || !goalWeight || !objective.trim()) {
             setError('Preencha todos os campos obrigatórios');
+            return;
+        }
+        const [day, month, year] = dateOfBirth.split('/');
+        const parsedDob = new Date(Number(year), Number(month) - 1, Number(day));
+        if (isNaN(parsedDob.getTime()) || parsedDob >= new Date()) {
+            setError('Data de nascimento inválida');
             return;
         }
         try {
@@ -88,7 +98,7 @@ export default function SettingsScreen() {
             setError(null);
             const updated = await saveUserProfile(userRepo, {
                 name: name.trim(),
-                age: parseInt(age, 10),
+                dateOfBirth: parsedDob,
                 height: parseFloat(height),
                 currentWeight: parseFloat(currentWeight),
                 goalWeight: parseFloat(goalWeight),
@@ -234,10 +244,10 @@ export default function SettingsScreen() {
                     <Input label="Nome" placeholder="Seu nome" value={name} onChangeText={setName} />
                     <View style={styles.row}>
                         <Input
-                            label="Idade"
-                            placeholder="25"
-                            value={age}
-                            onChangeText={setAge}
+                            label="Data de Nascimento"
+                            placeholder="DD/MM/AAAA"
+                            value={dateOfBirth}
+                            onChangeText={setDateOfBirth}
                             keyboardType="number-pad"
                             style={styles.halfInput}
                         />

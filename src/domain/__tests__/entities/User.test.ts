@@ -1,8 +1,10 @@
-import { createUser } from '../../entities/User';
+import { createUser, calculateAge } from '../../entities/User';
+
+const DOB_30_YEARS_AGO = new Date(new Date().getFullYear() - 30, 0, 1);
 
 const validParams = {
     name: 'John Doe',
-    age: 30,
+    dateOfBirth: DOB_30_YEARS_AGO,
     height: 180,
     currentWeight: 80,
     goalWeight: 75,
@@ -15,7 +17,7 @@ describe('createUser', () => {
     it('creates a valid user with all fields', () => {
         const user = createUser(validParams);
         expect(user.name).toBe('John Doe');
-        expect(user.age).toBe(30);
+        expect(calculateAge(user.dateOfBirth)).toBe(30);
         expect(user.height).toBe(180);
         expect(user.currentWeight).toBe(80);
         expect(user.goalWeight).toBe(75);
@@ -28,9 +30,17 @@ describe('createUser', () => {
         expect(() => createUser({ ...validParams, name: '' })).toThrow('User name is required');
     });
 
-    it('throws if age <= 0', () => {
-        expect(() => createUser({ ...validParams, age: 0 })).toThrow('Age must be greater than 0');
-        expect(() => createUser({ ...validParams, age: -1 })).toThrow('Age must be greater than 0');
+    it('throws if dateOfBirth is invalid', () => {
+        expect(() => createUser({ ...validParams, dateOfBirth: new Date('invalid') })).toThrow(
+            'Date of birth must be a valid date',
+        );
+    });
+
+    it('throws if dateOfBirth is in the future', () => {
+        const future = new Date(Date.now() + 1000 * 60 * 60 * 24);
+        expect(() => createUser({ ...validParams, dateOfBirth: future })).toThrow(
+            'Date of birth cannot be in the future',
+        );
     });
 
     it('throws if height <= 0', () => {

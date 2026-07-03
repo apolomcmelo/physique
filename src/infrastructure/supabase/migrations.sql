@@ -6,7 +6,7 @@
 create table if not exists user_profiles (
   id                   uuid primary key default gen_random_uuid(),
   name                 text not null,
-  age                  integer not null,
+  date_of_birth        date not null,
   height_cm            numeric not null,
   current_weight_kg    numeric not null,
   goal_weight_kg       numeric not null,
@@ -16,6 +16,12 @@ create table if not exists user_profiles (
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now()
 );
+
+-- Migration: replace age column with date_of_birth (run once on existing databases)
+-- alter table user_profiles add column if not exists date_of_birth date;
+-- update user_profiles set date_of_birth = (current_date - (age || ' years')::interval)::date where date_of_birth is null;
+-- alter table user_profiles alter column date_of_birth set not null;
+-- alter table user_profiles drop column if exists age;
 
 alter table user_profiles enable row level security;
 create policy "allow_all_user_profiles" on user_profiles for all using (true) with check (true);

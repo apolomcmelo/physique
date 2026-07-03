@@ -17,9 +17,10 @@ import { Typography as TypographyText } from '../../src/ui/components/Typography
 import { Colors, Spacing } from '../../src/ui/theme';
 import { MealPlanEntry } from '../../src/domain/entities/MealPlan';
 import { parseCsvMealPlan } from '../../src/domain/use-cases/meal/ParseCsvMealPlan';
+import { parseCsvWorkouts } from '../../src/domain/use-cases/workout/ParseCsvWorkouts';
 
 export default function PlanScreen() {
-    const { mealRepo } = useRepositories();
+    const { mealRepo, workoutRepo } = useRepositories();
     const [entries, setEntries] = useState<MealPlanEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [importing, setImporting] = useState(false);
@@ -63,6 +64,12 @@ export default function PlanScreen() {
 
             const parsed = parseCsvMealPlan(csvContent);
             await mealRepo.saveMealPlanEntries(parsed);
+
+            const workouts = parseCsvWorkouts(csvContent);
+            for (const workout of workouts) {
+                await workoutRepo.saveWorkout(workout);
+            }
+
             await loadEntries();
         } catch {
             setError('Erro ao importar CSV');

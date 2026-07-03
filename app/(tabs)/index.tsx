@@ -1,11 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     ScrollView,
     StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,15 +10,15 @@ import { MealPlanEntry } from '../../src/domain/entities/MealPlan';
 import { User } from '../../src/domain/entities/User';
 import { WeightRecord } from '../../src/domain/entities/WeightRecord';
 import { Workout } from '../../src/domain/entities/Workout';
+import { getItem } from '../../src/adapters/local/LocalStorage';
 import { getNextMeal } from '../../src/domain/use-cases/meal/GetNextMeal';
-import { recordWeight } from '../../src/domain/use-cases/weight/RecordWeight';
 import { getNextWorkout } from '../../src/domain/use-cases/workout/GetNextWorkout';
 import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { ProgressBar } from '../../src/ui/components/ProgressBar';
 import { Typography as TypographyText } from '../../src/ui/components/Typography';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
-import { Colors, Spacing, Typography } from '../../src/ui/theme';
+import { Colors, Spacing } from '../../src/ui/theme';
 
 export default function DashboardScreen() {
     const { userRepo, workoutRepo, mealRepo, weightRepo } = useRepositories();
@@ -33,9 +30,9 @@ export default function DashboardScreen() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const [drankWater, setDrankWater] = useState(false);
-    const [weightInput, setWeightInput] = useState('');
-    const [savingWeight, setSavingWeight] = useState(false);
+    const [waterPhase, setWaterPhase] = useState<'remind' | 'done'>('remind');
+    const waterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [waterIntervalMs, setWaterIntervalMs] = useState(60 * 60 * 1000); // default 1h
 
     useEffect(() => {
         async function load() {
@@ -56,6 +53,11 @@ export default function DashboardScreen() {
                 ]);
                 setNextWorkout(nw);
                 setNextMeal(nm);
+
+                const savedInterval = await getItem<number>('water_reminder_interval_ms');
+                if (savedInterval && savedInterval > 0) {
+                    setWaterIntervalMs(savedInterval);
+                }
             } catch (e) {
                 setError('Erro ao carregar dados');
             } finally {
@@ -63,20 +65,18 @@ export default function DashboardScreen() {
             }
         }
         load();
+
+        return () => {
+            if (waterTimerRef.current) clearTimeout(waterTimerRef.current);
+        };
     }, []);
 
-    async function handleRecordWeight() {
-        if (!weightInput) return;
-        const kg = parseFloat(weightInput);
-        if (isNaN(kg) || kg <= 0) return;
-        try {
-            setSavingWeight(true);
-            const record = await recordWeight(weightRepo, kg, null, null);
-            setLatestWeight(record);
-            setWeightInput('');
-        } finally {
-            setSavingWeight(false);
-        }
+    function handleDrankWater() {
+        setWaterPhase('done');
+        if (waterTimerRef.current) clearTimeout(waterTimerRef.current);
+        waterTimerRef.current = setTimeout(() => {
+            setWaterPhase('remind');
+        }, waterIntervalMs);
     }
 
     function formatMinutesUntil(date: Date): string {
@@ -106,7 +106,23 @@ export default function DashboardScreen() {
 
     const currentWeight = latestWeight?.weightKg ?? user?.currentWeight ?? 0;
     const goalWeight = user?.goalWeight ?? 0;
+    const profileWeight = user?.currentWeight ?? 0;
     const weightDelta = goalWeight > 0 ? currentWeight - goalWeight : 0;
+
+    // Correct progress for weight loss vs gain
+    let progressCurrent = 0;
+    let progressGoal = 1;
+    if (goalWeight > 0 && profileWeight > 0) {
+        if (profileWeight > goalWeight) {
+            // weight loss: measure how many kg lost out of total to lose
+            progressCurrent = Math.max(0, profileWeight - currentWeight);
+            progressGoal = Math.max(0.01, profileWeight - goalWeight);
+        } else if (profileWeight < goalWeight) {
+            // weight gain: measure how many kg gained out of total to gain
+            progressCurrent = Math.max(0, currentWeight - profileWeight);
+            progressGoal = Math.max(0.01, goalWeight - profileWeight);
+        }
+    }
 
     if (loading) {
         return (
@@ -155,13 +171,13 @@ export default function DashboardScreen() {
                         )}
                     </View>
                     {weightDelta !== 0 && (
-                        <TypographyText variant="bodySmall" color={weightDelta < 0 ? Colors.success : Colors.warning}>
-                            {weightDelta < 0 ? '▼' : '▲'} {Math.abs(weightDelta).toFixed(1)} kg para o objetivo
+                        <TypographyText variant="bodySmall" color={weightDelta > 0 ? Colors.warning : Colors.success}>
+                            {weightDelta > 0 ? '▼' : '▲'} {Math.abs(weightDelta).toFixed(1)} kg para o objetivo
                         </TypographyText>
                     )}
                     {goalWeight > 0 && currentWeight > 0 && (
                         <View style={{ marginTop: Spacing.sm }}>
-                            <ProgressBar current={currentWeight} goal={goalWeight} showPercentage />
+                            <ProgressBar current={progressCurrent} goal={progressGoal} showPercentage />
                         </View>
                     )}
                 </Card>
@@ -219,50 +235,16 @@ export default function DashboardScreen() {
                 {/* Water Reminder Card */}
                 <Card style={styles.card}>
                     <TypographyText variant="h4" color={Colors.textPrimary}>
-                        💧 Já bebeu água hoje?
+                        💧 {waterPhase === 'remind' ? 'Já bebeu água hoje? 🥺' : 'Excelente 😌'}
                     </TypographyText>
-                    <View style={styles.waterRow}>
-                        <TouchableOpacity
-                            style={[styles.waterBtn, drankWater && styles.waterBtnActive]}
-                            onPress={() => setDrankWater(true)}
-                        >
-                            <Text style={[Typography.h4, { color: drankWater ? Colors.white : Colors.textSecondary }]}>
-                                Sim
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.waterBtn, !drankWater && styles.waterBtnInactive]}
-                            onPress={() => setDrankWater(false)}
-                        >
-                            <Text style={[Typography.h4, { color: !drankWater ? Colors.white : Colors.textSecondary }]}>
-                                Não
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </Card>
-
-                {/* Quick Weight Record */}
-                <Card style={styles.card}>
-                    <TypographyText variant="label" color={Colors.textSecondary}>
-                        REGISTRAR PESO
-                    </TypographyText>
-                    <View style={styles.weightInputRow}>
-                        <TextInput
-                            style={styles.weightInput}
-                            value={weightInput}
-                            onChangeText={setWeightInput}
-                            placeholder="Ex: 75.5"
-                            placeholderTextColor={Colors.textDisabled}
-                            keyboardType="decimal-pad"
-                        />
+                    {waterPhase === 'remind' && (
                         <Button
-                            label="Salvar"
-                            onPress={handleRecordWeight}
-                            loading={savingWeight}
-                            disabled={!weightInput}
-                            style={styles.weightSaveBtn}
+                            label="Sim"
+                            onPress={handleDrankWater}
+                            variant="secondary"
+                            style={{ marginTop: Spacing.sm }}
                         />
-                    </View>
+                    )}
                 </Card>
             </ScrollView>
         </SafeAreaView>
@@ -277,29 +259,4 @@ const styles = StyleSheet.create({
     header: { marginBottom: Spacing.sm },
     card: { gap: Spacing.xs },
     weightRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.xs },
-    waterRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
-    waterBtn: {
-        flex: 1,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        alignItems: 'center',
-    },
-    waterBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-    waterBtnInactive: { backgroundColor: Colors.error, borderColor: Colors.error },
-    weightInputRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm, alignItems: 'center' },
-    weightInput: {
-        flex: 1,
-        backgroundColor: Colors.surfaceElevated,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: 8,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        color: Colors.textPrimary,
-        fontSize: 14,
-        minHeight: 44,
-    },
-    weightSaveBtn: { minWidth: 80 },
 });
