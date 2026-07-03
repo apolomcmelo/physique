@@ -1,4 +1,4 @@
-import { User } from '../../entities/User';
+import { User, calculateAge } from '../../entities/User';
 import { WeightRecord } from '../../entities/WeightRecord';
 import { Exam } from '../../entities/Exam';
 import { FoodItem } from '../../entities/FoodItem';
@@ -9,6 +9,8 @@ export function generateNewPlanPrompt(
     exams: Exam[],
     foodItems: FoodItem[],
 ): string {
+    const calculatedAge = calculateAge(user.dateOfBirth);
+
     const latestWeight = weightRecords.length > 0
         ? weightRecords.sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0]
         : null;
@@ -32,7 +34,7 @@ export function generateNewPlanPrompt(
 
 ## User Profile
 - Name: ${user.name}
-- Age: ${user.age} years
+- Age: ${calculatedAge} years
 - Height: ${user.height} cm
 - Current Weight: ${latestWeight ? latestWeight.weightKg : user.currentWeight} kg
 - Goal Weight: ${user.goalWeight} kg

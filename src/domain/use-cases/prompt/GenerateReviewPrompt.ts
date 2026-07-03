@@ -1,4 +1,4 @@
-import { User } from '../../entities/User';
+import { User, calculateAge } from '../../entities/User';
 import { WeightRecord } from '../../entities/WeightRecord';
 import { WorkoutSession } from '../../entities/WorkoutSession';
 import { Exam } from '../../entities/Exam';
@@ -13,6 +13,8 @@ export function generateReviewPrompt(
     mealEntries: MealPlanEntry[],
     foodItems: FoodItem[],
 ): string {
+    const calculatedAge = calculateAge(user.dateOfBirth);
+
     const sortedWeight = [...weightHistory].sort(
         (a, b) => b.recordedAt.getTime() - a.recordedAt.getTime(),
     );
@@ -71,7 +73,7 @@ export function generateReviewPrompt(
 
 ## User Profile
 - Name: ${user.name}
-- Age: ${user.age} years
+- Age: ${calculatedAge} years
 - Height: ${user.height} cm
 - Current Weight: ${latestWeight ? latestWeight.weightKg : user.currentWeight} kg
 - Goal Weight: ${user.goalWeight} kg
