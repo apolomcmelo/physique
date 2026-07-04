@@ -88,3 +88,32 @@ describe('createUser', () => {
         expect(user.updatedAt.getTime()).toBeLessThanOrEqual(after.getTime());
     });
 });
+
+describe('calculateAge', () => {
+    it('returns correct age when birthday has already passed this year', () => {
+        const ref = new Date(2026, 5, 15); // 15 Jun 2026
+        const dob = new Date(1994, 2, 10); // 10 Mar 1994
+        expect(calculateAge(dob, ref)).toBe(32);
+    });
+
+    it('returns correct age when birthday has not yet occurred this year', () => {
+        const ref = new Date(2026, 1, 1); // 1 Feb 2026
+        const dob = new Date(1994, 5, 15); // 15 Jun 1994
+        expect(calculateAge(dob, ref)).toBe(31);
+    });
+
+    it('returns correct age on the exact birthday', () => {
+        const ref = new Date(2026, 5, 15);
+        const dob = new Date(1994, 5, 15);
+        expect(calculateAge(dob, ref)).toBe(32);
+    });
+
+    it('returns 0 for a newborn (same day)', () => {
+        const now = new Date();
+        expect(calculateAge(now, now)).toBe(0);
+    });
+
+    it('throws for an invalid date', () => {
+        expect(() => calculateAge(new Date('not-a-date'))).toThrow('Date of birth must be a valid date');
+    });
+});

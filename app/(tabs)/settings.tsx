@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Exam, ExamFileType, createExam } from '../../src/domain/entities/Exam';
-import { User } from '../../src/domain/entities/User';
+import { User, calculateAge } from '../../src/domain/entities/User';
 import { generateNewPlanPrompt } from '../../src/domain/use-cases/prompt/GenerateNewPlanPrompt';
 import { generateReviewPrompt } from '../../src/domain/use-cases/prompt/GenerateReviewPrompt';
 import { saveUserProfile } from '../../src/domain/use-cases/user/SaveUserProfile';
@@ -33,8 +33,9 @@ export default function SettingsScreen() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [editMode, setEditMode] = useState(false);
 
-    // Profile form
+    // Profile form fields
     const [name, setName] = useState('');
     const [dateOfBirth, setDateOfBirth] = useState(''); // DD/MM/AAAA
     const [height, setHeight] = useState('');
@@ -51,9 +52,22 @@ export default function SettingsScreen() {
     // Exam upload
     const [uploadingExam, setUploadingExam] = useState(false);
 
-    useEffect(() => {
-        loadData();
-    }, []);
+    useEffect(() => { loadData(); }, []);
+
+    function populateForm(u: User) {
+        const d = u.dateOfBirth instanceof Date ? u.dateOfBirth : new Date(u.dateOfBirth);
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = String(d.getFullYear());
+        setName(u.name);
+        setDateOfBirth(`${dd}/${mm}/${yyyy}`);
+        setHeight(String(u.height));
+        setCurrentWeight(String(u.currentWeight));
+        setGoalWeight(String(u.goalWeight));
+        setBodyFat(u.bodyFatPercentage !== null ? String(u.bodyFatPercentage) : '');
+        setProtein(u.proteinPercentage !== null ? String(u.proteinPercentage) : '');
+        setObjective(u.objective);
+    }
 
     async function loadData() {
         try {
@@ -62,18 +76,10 @@ export default function SettingsScreen() {
             setExams(e);
             if (u) {
                 setUser(u);
-                setName(u.name);
-                const d = u.dateOfBirth;
-                const dd = String(d.getDate()).padStart(2, '0');
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const yyyy = String(d.getFullYear());
-                setDateOfBirth(`${dd}/${mm}/${yyyy}`);
-                setHeight(String(u.height));
-                setCurrentWeight(String(u.currentWeight));
-                setGoalWeight(String(u.goalWeight));
-                setBodyFat(u.bodyFatPercentage !== null ? String(u.bodyFatPercentage) : '');
-                setProtein(u.proteinPercentage !== null ? String(u.proteinPercentage) : '');
-                setObjective(u.objective);
+                populateForm(u);
+                setEditMode(false);
+            } else {
+                setEditMode(true);
             }
         } catch {
             setError('Erro ao carregar perfil');
@@ -82,36 +88,68 @@ export default function SettingsScreen() {
         }
     }
 
+    /** Accepts comma or dot as decimal separator (pt-BR keyboards use comma). */
+    function parseDecimal(value: string): number {
+        return parseFloat(value.replace(',', '.'));
+    }
+
+    function parseDateInput(value: string): Date | null {
+        const [day, month, year] = value.split('/');
+        if (!day || !month || !year) return null;
+        const d = new Date(Number(year), Number(month) - 1, Number(day));
+        if (isNaN(d.getTime()) || d >= new Date()) return null;
+        return d;
+    }
+
     async function handleSaveProfile() {
+        setError(null);
         if (!name.trim() || !dateOfBirth || !height || !currentWeight || !goalWeight || !objective.trim()) {
             setError('Preencha todos os campos obrigatórios');
             return;
         }
-        const [day, month, year] = dateOfBirth.split('/');
-        const parsedDob = new Date(Number(year), Number(month) - 1, Number(day));
-        if (isNaN(parsedDob.getTime()) || parsedDob >= new Date()) {
-            setError('Data de nascimento inválida');
+        const parsedDob = parseDateInput(dateOfBirth);
+        if (!parsedDob) {
+            setError('Data de nascimento inválida (use DD/MM/AAAA e uma data no passado)');
+            return;
+        }
+        const parsedHeight = parseDecimal(height);
+        const parsedCurrentWeight = parseDecimal(currentWeight);
+        const parsedGoalWeight = parseDecimal(goalWeight);
+        if (parsedHeight <= 0 || parsedCurrentWeight <= 0 || parsedGoalWeight <= 0) {
+            setError('Altura e pesos devem ser maiores que zero');
             return;
         }
         try {
             setSaving(true);
-            setError(null);
             const updated = await saveUserProfile(userRepo, {
                 name: name.trim(),
                 dateOfBirth: parsedDob,
-                height: parseFloat(height),
-                currentWeight: parseFloat(currentWeight),
-                goalWeight: parseFloat(goalWeight),
-                bodyFatPercentage: bodyFat ? parseFloat(bodyFat) : null,
-                proteinPercentage: protein ? parseFloat(protein) : null,
+                height: parsedHeight,
+                currentWeight: parsedCurrentWeight,
+                goalWeight: parsedGoalWeight,
+                bodyFatPercentage: bodyFat ? parseDecimal(bodyFat) : null,
+                proteinPercentage: protein ? parseDecimal(protein) : null,
                 objective: objective.trim(),
             });
             setUser(updated);
-        } catch (e) {
+            setEditMode(false);
+        } catch {
             setError('Erro ao salvar perfil');
         } finally {
             setSaving(false);
         }
+    }
+
+    function handleStartEdit() {
+        if (user) populateForm(user);
+        setError(null);
+        setEditMode(true);
+    }
+
+    function handleCancelEdit() {
+        if (user) populateForm(user);
+        setError(null);
+        setEditMode(false);
     }
 
     async function handleGenerateNewPlanPrompt() {
@@ -221,6 +259,14 @@ export default function SettingsScreen() {
         );
     }
 
+    const dob = user
+        ? (user.dateOfBirth instanceof Date ? user.dateOfBirth : new Date(user.dateOfBirth))
+        : null;
+    const age = dob ? calculateAge(dob) : null;
+    const dobFormatted = dob
+        ? `${String(dob.getDate()).padStart(2, '0')}/${String(dob.getMonth() + 1).padStart(2, '0')}/${dob.getFullYear()}`
+        : '—';
+
     return (
         <SafeAreaView style={styles.safe}>
             <ScrollView
@@ -229,9 +275,17 @@ export default function SettingsScreen() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                <TypographyText variant="h2" color={Colors.textPrimary} style={styles.sectionTitle}>
-                    Perfil
-                </TypographyText>
+                {/* ── PROFILE HEADER ── */}
+                <View style={styles.sectionHeader}>
+                    <TypographyText variant="h2" color={Colors.textPrimary}>
+                        Perfil
+                    </TypographyText>
+                    {user && !editMode && (
+                        <TouchableOpacity onPress={handleStartEdit} style={styles.editBtn} accessibilityLabel="Editar perfil">
+                            <Text style={styles.editIcon}>✏️</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
 
                 {error && (
                     <TypographyText variant="body" color={Colors.error} style={{ marginBottom: Spacing.sm }}>
@@ -239,98 +293,144 @@ export default function SettingsScreen() {
                     </TypographyText>
                 )}
 
-                {/* Profile Form */}
-                <Card style={styles.card}>
-                    <Input label="Nome" placeholder="Seu nome" value={name} onChangeText={setName} />
-                    <View style={styles.row}>
-                        <Input
-                            label="Data de Nascimento"
-                            placeholder="DD/MM/AAAA"
-                            value={dateOfBirth}
-                            onChangeText={setDateOfBirth}
-                            keyboardType="number-pad"
-                            style={styles.halfInput}
-                        />
-                        <Input
-                            label="Altura (cm)"
-                            placeholder="175"
-                            value={height}
-                            onChangeText={setHeight}
-                            keyboardType="decimal-pad"
-                            style={styles.halfInput}
-                        />
-                    </View>
-                    <View style={styles.row}>
-                        <Input
-                            label="Peso Atual (kg)"
-                            placeholder="75"
-                            value={currentWeight}
-                            onChangeText={setCurrentWeight}
-                            keyboardType="decimal-pad"
-                            style={styles.halfInput}
-                        />
-                        <Input
-                            label="Peso Objetivo (kg)"
-                            placeholder="70"
-                            value={goalWeight}
-                            onChangeText={setGoalWeight}
-                            keyboardType="decimal-pad"
-                            style={styles.halfInput}
-                        />
-                    </View>
-                    <View style={styles.row}>
-                        <Input
-                            label="Gordura (%)"
-                            placeholder="20"
-                            value={bodyFat}
-                            onChangeText={setBodyFat}
-                            keyboardType="decimal-pad"
-                            style={styles.halfInput}
-                        />
-                        <Input
-                            label="Proteína (%)"
-                            placeholder="22"
-                            value={protein}
-                            onChangeText={setProtein}
-                            keyboardType="decimal-pad"
-                            style={styles.halfInput}
-                        />
-                    </View>
-                    <Input
-                        label="Objetivo"
-                        placeholder="Ex: Perder gordura e ganhar massa"
-                        value={objective}
-                        onChangeText={setObjective}
-                        multiline
-                    />
-                    <Button
-                        label="Salvar Perfil"
-                        onPress={handleSaveProfile}
-                        loading={saving}
-                        style={{ marginTop: Spacing.sm }}
-                    />
-                </Card>
+                {/* ── READ-ONLY MODE ── */}
+                {user && !editMode && (
+                    <Card style={styles.card}>
+                        <TypographyText variant="h3" color={Colors.textPrimary}>
+                            {user.name}
+                        </TypographyText>
 
-                {/* Prompts */}
-                <TypographyText variant="h3" color={Colors.textPrimary} style={styles.sectionTitle}>
-                    Gerar Prompts
-                </TypographyText>
-                <Card style={styles.card}>
-                    <Button
-                        label="Gerar Prompt (Novo Plano)"
-                        onPress={handleGenerateNewPlanPrompt}
-                        disabled={!user}
-                        style={{ marginBottom: Spacing.sm }}
-                    />
-                    <Button
-                        label="Gerar Prompt (Revisão)"
-                        onPress={handleGenerateReviewPrompt}
-                        variant="secondary"
-                        disabled={!user}
-                    />
-                </Card>
+                        <View style={styles.infoGrid}>
+                            <InfoRow label="Data de Nascimento" value={dobFormatted} />
+                            <InfoRow label="Idade" value={age !== null ? `${age} anos` : '—'} />
+                            <InfoRow label="Altura" value={`${user.height} cm`} />
+                            <InfoRow label="Peso Atual" value={`${user.currentWeight} kg`} />
+                            <InfoRow label="Peso Objetivo" value={`${user.goalWeight} kg`} />
+                            {user.bodyFatPercentage !== null && (
+                                <InfoRow label="Gordura" value={`${user.bodyFatPercentage}%`} />
+                            )}
+                            {user.proteinPercentage !== null && (
+                                <InfoRow label="Proteína" value={`${user.proteinPercentage}%`} />
+                            )}
+                        </View>
 
-                {/* Exams */}
+                        <View style={styles.objectiveBlock}>
+                            <TypographyText variant="label" color={Colors.textSecondary}>
+                                OBJETIVO
+                            </TypographyText>
+                            <TypographyText variant="body" color={Colors.textPrimary} style={{ marginTop: 2 }}>
+                                {user.objective}
+                            </TypographyText>
+                        </View>
+                    </Card>
+                )}
+
+                {/* ── EDIT / CREATE FORM ── */}
+                {(!user || editMode) && (
+                    <Card style={styles.card}>
+                        <Input label="Nome" placeholder="Seu nome" value={name} onChangeText={setName} />
+                        <View style={styles.row}>
+                            <Input
+                                label="Data de Nascimento"
+                                placeholder="DD/MM/AAAA"
+                                value={dateOfBirth}
+                                onChangeText={setDateOfBirth}
+                                keyboardType="number-pad"
+                                style={styles.halfInput}
+                            />
+                            <Input
+                                label="Altura (cm)"
+                                placeholder="175"
+                                value={height}
+                                onChangeText={setHeight}
+                                keyboardType="decimal-pad"
+                                style={styles.halfInput}
+                            />
+                        </View>
+                        <View style={styles.row}>
+                            <Input
+                                label="Peso Atual (kg)"
+                                placeholder="75"
+                                value={currentWeight}
+                                onChangeText={setCurrentWeight}
+                                keyboardType="decimal-pad"
+                                style={styles.halfInput}
+                            />
+                            <Input
+                                label="Peso Objetivo (kg)"
+                                placeholder="70"
+                                value={goalWeight}
+                                onChangeText={setGoalWeight}
+                                keyboardType="decimal-pad"
+                                style={styles.halfInput}
+                            />
+                        </View>
+                        <View style={styles.row}>
+                            <Input
+                                label="Gordura (%)"
+                                placeholder="20"
+                                value={bodyFat}
+                                onChangeText={setBodyFat}
+                                keyboardType="decimal-pad"
+                                style={styles.halfInput}
+                            />
+                            <Input
+                                label="Proteína (%)"
+                                placeholder="22"
+                                value={protein}
+                                onChangeText={setProtein}
+                                keyboardType="decimal-pad"
+                                style={styles.halfInput}
+                            />
+                        </View>
+                        <Input
+                            label="Objetivo"
+                            placeholder="Ex: Perder gordura e ganhar massa"
+                            value={objective}
+                            onChangeText={setObjective}
+                            multiline
+                        />
+                        <View style={[styles.row, { marginTop: Spacing.sm }]}>
+                            {editMode && user && (
+                                <Button
+                                    label="Cancelar"
+                                    onPress={handleCancelEdit}
+                                    variant="secondary"
+                                    style={{ flex: 1 }}
+                                />
+                            )}
+                            <Button
+                                label="Salvar Perfil"
+                                onPress={handleSaveProfile}
+                                loading={saving}
+                                style={{ flex: 1 }}
+                            />
+                        </View>
+                    </Card>
+                )}
+
+                {/* ── PROMPTS ── */}
+                {user && (
+                    <>
+                        <TypographyText variant="h3" color={Colors.textPrimary} style={styles.sectionTitle}>
+                            Gerar Prompts
+                        </TypographyText>
+                        <Card style={styles.card}>
+                            <Button
+                                label="Gerar Prompt (Novo Plano)"
+                                onPress={handleGenerateNewPlanPrompt}
+                                style={{ marginBottom: Spacing.sm }}
+                            />
+                            <Button
+                                label="Gerar Prompt (Revisão)"
+                                onPress={handleGenerateReviewPrompt}
+                                variant="secondary"
+                            />
+                        </Card>
+                    </>
+                )}
+
+                {/* ── EXAMS ── */}
                 <TypographyText variant="h3" color={Colors.textPrimary} style={styles.sectionTitle}>
                     Exames
                 </TypographyText>
@@ -364,7 +464,7 @@ export default function SettingsScreen() {
                     )}
                 </Card>
 
-                {/* Body Photos */}
+                {/* ── BODY PHOTOS ── */}
                 <TypographyText variant="h3" color={Colors.textPrimary} style={styles.sectionTitle}>
                     Fotos Corporais
                 </TypographyText>
@@ -377,7 +477,7 @@ export default function SettingsScreen() {
                 </Card>
             </ScrollView>
 
-            {/* Prompt Modal */}
+            {/* ── PROMPT MODAL ── */}
             <Modal
                 visible={promptVisible}
                 animationType="slide"
@@ -405,13 +505,48 @@ export default function SettingsScreen() {
     );
 }
 
+// ── Helper component ────────────────────────────────────────────────────────
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+    return (
+        <View style={infoRowStyles.container}>
+            <TypographyText variant="label" color={Colors.textSecondary} style={infoRowStyles.label}>
+                {label}
+            </TypographyText>
+            <TypographyText variant="body" color={Colors.textPrimary} style={infoRowStyles.value}>
+                {value}
+            </TypographyText>
+        </View>
+    );
+}
+
+const infoRowStyles = StyleSheet.create({
+    container: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: Spacing.xs,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border,
+    },
+    label: { flex: 1 },
+    value: { flex: 1, textAlign: 'right' },
+});
+
+// ── Styles ──────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: Colors.background },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
     scroll: { flex: 1 },
     content: { padding: Spacing.md, gap: Spacing.sm },
+    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.xs },
     sectionTitle: { marginTop: Spacing.sm, marginBottom: Spacing.xs },
+    editBtn: { padding: Spacing.xs },
+    editIcon: { fontSize: 20 },
     card: { gap: Spacing.sm },
+    infoGrid: { gap: 0 },
+    objectiveBlock: { paddingTop: Spacing.sm },
     row: { flexDirection: 'row', gap: Spacing.sm },
     halfInput: { flex: 1 },
     examRow: {

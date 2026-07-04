@@ -10,6 +10,7 @@ export class LocalUserRepository implements IUserRepository {
         if (!raw) return null;
         return {
             ...raw,
+            dateOfBirth: new Date(raw.dateOfBirth),
             createdAt: new Date(raw.createdAt),
             updatedAt: new Date(raw.updatedAt),
         };

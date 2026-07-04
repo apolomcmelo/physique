@@ -67,6 +67,10 @@
     },
     "jest": {
         "preset": "jest-expo",
+        "testPathIgnorePatterns": [
+            "<rootDir>/node_modules/",
+            "<rootDir>/src/domain/__tests__/setup.ts"
+        ],
         "setupFilesAfterFramework": [
             "@testing-library/jest-native/extend-expect"
         ],
