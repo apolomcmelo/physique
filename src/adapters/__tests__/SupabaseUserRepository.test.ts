@@ -61,4 +61,67 @@ describe('SupabaseUserRepository', () => {
             await expect(repo.getUser()).rejects.toThrow('Failed to get user: db error');
         });
     });
+
+    describe('saveUser()', () => {
+        it('inserts a row with a valid UUID v4 id', async () => {
+            const chain = buildChain();
+            const user = {
+                id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+                name: 'Bob',
+                dateOfBirth: new Date(1985, 4, 12), // 12 May 1985, local time
+                height: 180,
+                currentWeight: 80,
+                goalWeight: 70,
+                bodyFatPercentage: null,
+                proteinPercentage: null,
+                objective: 'Get fit',
+                createdAt: new Date('2024-01-01T00:00:00.000Z'),
+                updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+            };
+            await repo.saveUser(user);
+            const insertedRow = chain.insert.mock.calls[0][0];
+            // id must be the exact UUID passed — not a custom timestamp string
+            expect(insertedRow.id).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
+        });
+
+        it('serialises date_of_birth using local date, not UTC, to avoid off-by-one in negative UTC offsets', async () => {
+            const chain = buildChain();
+            // 12 May 1985 at local midnight — toISOString() would shift this to 11 May in UTC-x zones
+            const user = {
+                id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+                name: 'Bob',
+                dateOfBirth: new Date(1985, 4, 12), // May = month index 4
+                height: 180,
+                currentWeight: 80,
+                goalWeight: 70,
+                bodyFatPercentage: null,
+                proteinPercentage: null,
+                objective: 'Get fit',
+                createdAt: new Date('2024-01-01T00:00:00.000Z'),
+                updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+            };
+            await repo.saveUser(user);
+            const insertedRow = chain.insert.mock.calls[0][0];
+            expect(insertedRow.date_of_birth).toBe('1985-05-12');
+        });
+
+        it('throws when Supabase returns an error on insert', async () => {
+            const chain = buildChain();
+            chain.insert.mockResolvedValue({ error: { message: 'insert error' } });
+            const user = {
+                id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+                name: 'Bob',
+                dateOfBirth: new Date(1985, 4, 12),
+                height: 180,
+                currentWeight: 80,
+                goalWeight: 70,
+                bodyFatPercentage: null,
+                proteinPercentage: null,
+                objective: 'Get fit',
+                createdAt: new Date('2024-01-01T00:00:00.000Z'),
+                updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+            };
+            await expect(repo.saveUser(user)).rejects.toThrow('Failed to save user: insert error');
+        });
+    });
 });

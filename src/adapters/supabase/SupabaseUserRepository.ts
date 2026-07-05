@@ -36,7 +36,11 @@ function userToRow(user: User): Omit<UserProfileRow, 'created_at' | 'updated_at'
     return {
         id: user.id,
         name: user.name,
-        date_of_birth: user.dateOfBirth.toISOString().split('T')[0],
+        date_of_birth: [
+            user.dateOfBirth.getFullYear(),
+            String(user.dateOfBirth.getMonth() + 1).padStart(2, '0'),
+            String(user.dateOfBirth.getDate()).padStart(2, '0'),
+        ].join('-'),
         height_cm: user.height,
         current_weight_kg: user.currentWeight,
         goal_weight_kg: user.goalWeight,
