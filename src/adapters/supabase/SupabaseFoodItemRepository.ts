@@ -75,19 +75,12 @@ export class SupabaseFoodItemRepository implements IFoodItemRepository {
             .from('food_items')
             .select('*')
             .eq('id', id)
-            .single();
+            .maybeSingle();
 
         if (error) {
-            if (error.code === 'PGRST116') {
-                return null;
-            }
             throw new Error(`Failed to get food item by id: ${error.message}`);
         }
 
-        if (!data) {
-            return null;
-        }
-
-        return rowToFoodItem(data as FoodItemRow);
+        return data ? rowToFoodItem(data as FoodItemRow) : null;
     }
 }

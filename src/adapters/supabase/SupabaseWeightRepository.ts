@@ -67,19 +67,12 @@ export class SupabaseWeightRepository implements IWeightRepository {
             .select('*')
             .order('recorded_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
         if (error) {
-            if (error.code === 'PGRST116') {
-                return null;
-            }
             throw new Error(`Failed to get latest weight: ${error.message}`);
         }
 
-        if (!data) {
-            return null;
-        }
-
-        return rowToWeightRecord(data as WeightRecordRow);
+        return data ? rowToWeightRecord(data as WeightRecordRow) : null;
     }
 }

@@ -53,21 +53,13 @@ export class SupabaseUserRepository implements IUserRepository {
             .from('user_profiles')
             .select('*')
             .limit(1)
-            .single();
+            .maybeSingle();
 
         if (error) {
-            if (error.code === 'PGRST116') {
-                // No rows found
-                return null;
-            }
             throw new Error(`Failed to get user: ${error.message}`);
         }
 
-        if (!data) {
-            return null;
-        }
-
-        return rowToUser(data as UserProfileRow);
+        return data ? rowToUser(data as UserProfileRow) : null;
     }
 
     async saveUser(user: User): Promise<void> {

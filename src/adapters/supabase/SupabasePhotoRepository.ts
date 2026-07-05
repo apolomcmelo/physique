@@ -73,20 +73,13 @@ export class SupabasePhotoRepository implements IPhotoRepository {
             .eq('angle', angle)
             .order('captured_at', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
         if (error) {
-            if (error.code === 'PGRST116') {
-                return null;
-            }
             throw new Error(`Failed to get latest photo by angle: ${error.message}`);
         }
 
-        if (!data) {
-            return null;
-        }
-
-        return rowToBodyPhoto(data as BodyPhotoRow);
+        return data ? rowToBodyPhoto(data as BodyPhotoRow) : null;
     }
 
     async saveBodyPhoto(photo: BodyPhoto): Promise<void> {

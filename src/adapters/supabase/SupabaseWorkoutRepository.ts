@@ -112,20 +112,13 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
             .from('workouts')
             .select('*, exercises(*)')
             .eq('id', id)
-            .single();
+            .maybeSingle();
 
         if (error) {
-            if (error.code === 'PGRST116') {
-                return null;
-            }
             throw new Error(`Failed to get workout by id: ${error.message}`);
         }
 
-        if (!data) {
-            return null;
-        }
-
-        return rowToWorkout(data as WorkoutRow);
+        return data ? rowToWorkout(data as WorkoutRow) : null;
     }
 
     async saveWorkout(workout: Workout): Promise<void> {
