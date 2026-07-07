@@ -1,10 +1,14 @@
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
     Alert,
+    Platform,
     ScrollView,
     StyleSheet,
-    Text
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { recognizeNutritionLabel } from '../../src/adapters/ocr/TesseractOcrAdapter';
 import { createFoodItem } from '../../src/domain/entities/FoodItem';
@@ -14,11 +18,16 @@ import { Input } from '../../src/ui/components/Input';
 import { MacroRow } from '../../src/ui/components/MacroRow';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Spacing } from '../../src/ui/theme';
+import { shouldOpenInAppCamera } from './capture';
 import { FOOD_SCAN_RECOGNIZED_TEXT_LABEL, getFoodScanPrimaryActionLabel } from './copy';
 
 export default function FoodScanScreen() {
     const { foodRepo } = useRepositories();
+    const cameraRef = useRef<CameraView>(null);
+    const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
     const [loading, setLoading] = useState(false);
+    const [cameraOpen, setCameraOpen] = useState(false);
     const [rawText, setRawText] = useState('');
     const [name, setName] = useState('');
     const [brand, setBrand] = useState('');
@@ -30,20 +39,11 @@ export default function FoodScanScreen() {
     const [ingredients, setIngredients] = useState('');
     const [saved, setSaved] = useState(false);
 
-    async function scanLabel() {
-        const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.8,
-        });
-
-        if (result.canceled || !result.assets[0]) return;
-
+    async function processImageUri(uri: string) {
         setLoading(true);
         setSaved(false);
         try {
-            const { rawText: text, nutritionData } = await recognizeNutritionLabel(
-                result.assets[0].uri,
-            );
+            const { rawText: text, nutritionData } = await recognizeNutritionLabel(uri);
             setRawText(text);
             if (nutritionData.calories) setCalories(String(nutritionData.calories));
             if (nutritionData.proteinGrams) setProtein(String(nutritionData.proteinGrams));
@@ -51,10 +51,52 @@ export default function FoodScanScreen() {
             if (nutritionData.fatGrams) setFat(String(nutritionData.fatGrams));
             if (nutritionData.servingSizeGrams) setServingSize(String(nutritionData.servingSizeGrams));
             if (nutritionData.ingredients) setIngredients(nutritionData.ingredients);
-        } catch (e) {
+        } catch {
             Alert.alert('Erro', 'Não foi possível ler o rótulo. Preencha manualmente.');
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function scanFromPickerCamera() {
+        const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.8,
+        });
+
+        if (result.canceled || !result.assets[0]) return;
+        await processImageUri(result.assets[0].uri);
+    }
+
+    async function openCameraFlow() {
+        if (shouldOpenInAppCamera(Platform.OS, globalThis.navigator?.mediaDevices)) {
+            if (!cameraPermission?.granted) {
+                const permissionResult = await requestCameraPermission();
+                if (!permissionResult.granted) {
+                    Alert.alert('Permissão necessária', 'Permita o acesso à câmera para importar o rótulo.');
+                    return;
+                }
+            }
+            setCameraOpen(true);
+            return;
+        }
+
+        await scanFromPickerCamera();
+    }
+
+    async function captureFromInAppCamera() {
+        if (!cameraRef.current) return;
+        try {
+            const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+            if (!photo?.uri) {
+                Alert.alert('Erro', 'Não foi possível capturar a imagem.');
+                return;
+            }
+
+            setCameraOpen(false);
+            await processImageUri(photo.uri);
+        } catch {
+            Alert.alert('Erro', 'Não foi possível capturar a imagem.');
         }
     }
 
@@ -86,6 +128,32 @@ export default function FoodScanScreen() {
         }
     }
 
+    if (cameraOpen) {
+        return (
+            <View style={styles.cameraContainer}>
+                <CameraView ref={cameraRef} style={styles.cameraPreview} facing="back" />
+                <View style={styles.cameraControls}>
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancelar captura"
+                        style={styles.cameraSecondaryBtn}
+                        onPress={() => setCameraOpen(false)}
+                    >
+                        <Text style={styles.cameraSecondaryBtnText}>Cancelar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Capturar rótulo"
+                        style={styles.cameraCaptureBtn}
+                        onPress={captureFromInAppCamera}
+                    >
+                        <Text style={styles.cameraCaptureBtnText}>Capturar</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
+
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
             <Text style={styles.title}>Importar Alimento</Text>
@@ -95,7 +163,7 @@ export default function FoodScanScreen() {
 
             <Button
                 label={getFoodScanPrimaryActionLabel(loading)}
-                onPress={scanLabel}
+                onPress={openCameraFlow}
                 variant="primary"
                 loading={loading}
                 style={styles.scanButton}
@@ -197,5 +265,42 @@ const styles = StyleSheet.create({
     },
     saveButton: {
         marginTop: Spacing.sm,
+    },
+    cameraContainer: {
+        flex: 1,
+        backgroundColor: '#000',
+    },
+    cameraPreview: {
+        flex: 1,
+    },
+    cameraControls: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.md,
+        backgroundColor: Colors.surface,
+    },
+    cameraSecondaryBtn: {
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 8,
+    },
+    cameraSecondaryBtnText: {
+        color: Colors.textSecondary,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    cameraCaptureBtn: {
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        borderRadius: 8,
+        backgroundColor: Colors.primary,
+    },
+    cameraCaptureBtnText: {
+        color: Colors.white,
+        fontSize: 14,
+        fontWeight: '700',
     },
 });
