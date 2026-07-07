@@ -14,6 +14,7 @@ import { Input } from '../../src/ui/components/Input';
 import { MacroRow } from '../../src/ui/components/MacroRow';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Spacing } from '../../src/ui/theme';
+import { FOOD_SCAN_RECOGNIZED_TEXT_LABEL, getFoodScanPrimaryActionLabel } from './copy';
 
 export default function FoodScanScreen() {
     const { foodRepo } = useRepositories();
@@ -93,7 +94,7 @@ export default function FoodScanScreen() {
             </Text>
 
             <Button
-                label={loading ? 'Processando OCR...' : '📷 Escanear Rótulo'}
+                label={getFoodScanPrimaryActionLabel(loading)}
                 onPress={scanLabel}
                 variant="primary"
                 loading={loading}
@@ -102,7 +103,7 @@ export default function FoodScanScreen() {
 
             {rawText ? (
                 <Card style={styles.ocrCard}>
-                    <Text style={styles.ocrLabel}>Texto Reconhecido (OCR)</Text>
+                    <Text style={styles.ocrLabel}>{FOOD_SCAN_RECOGNIZED_TEXT_LABEL}</Text>
                     <Text style={styles.ocrText} numberOfLines={6}>
                         {rawText}
                     </Text>

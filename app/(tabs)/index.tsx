@@ -246,6 +246,7 @@ export default function DashboardScreen() {
                         />
                     )}
                 </Card>
+
             </ScrollView>
         </SafeAreaView>
     );
