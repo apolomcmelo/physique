@@ -16,6 +16,11 @@ import { Exam, ExamFileType, createExam } from '../../src/domain/entities/Exam';
 import { User, calculateAge } from '../../src/domain/entities/User';
 import { generateNewPlanPrompt } from '../../src/domain/use-cases/prompt/GenerateNewPlanPrompt';
 import { generateReviewPrompt } from '../../src/domain/use-cases/prompt/GenerateReviewPrompt';
+import {
+    formatDateOfBirthDisplay,
+    formatDateOfBirthInput,
+    parseDateOfBirthInput,
+} from '../../src/domain/use-cases/user/DateOfBirthInput';
 import { saveUserProfile } from '../../src/domain/use-cases/user/SaveUserProfile';
 import { supabase } from '../../src/infrastructure/supabase/client';
 import { Button } from '../../src/ui/components/Button';
@@ -56,11 +61,8 @@ export default function SettingsScreen() {
 
     function populateForm(u: User) {
         const d = u.dateOfBirth instanceof Date ? u.dateOfBirth : new Date(u.dateOfBirth);
-        const dd = String(d.getDate()).padStart(2, '0');
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const yyyy = String(d.getFullYear());
         setName(u.name);
-        setDateOfBirth(`${dd}/${mm}/${yyyy}`);
+        setDateOfBirth(formatDateOfBirthDisplay(d));
         setHeight(String(u.height));
         setCurrentWeight(String(u.currentWeight));
         setGoalWeight(String(u.goalWeight));
@@ -93,21 +95,13 @@ export default function SettingsScreen() {
         return parseFloat(value.replace(',', '.'));
     }
 
-    function parseDateInput(value: string): Date | null {
-        const [day, month, year] = value.split('/');
-        if (!day || !month || !year) return null;
-        const d = new Date(Number(year), Number(month) - 1, Number(day));
-        if (isNaN(d.getTime()) || d >= new Date()) return null;
-        return d;
-    }
-
     async function handleSaveProfile() {
         setError(null);
         if (!name.trim() || !dateOfBirth || !height || !currentWeight || !goalWeight || !objective.trim()) {
             setError('Preencha todos os campos obrigatórios');
             return;
         }
-        const parsedDob = parseDateInput(dateOfBirth);
+        const parsedDob = parseDateOfBirthInput(dateOfBirth);
         if (!parsedDob) {
             setError('Data de nascimento inválida (use DD/MM/AAAA e uma data no passado)');
             return;
@@ -334,7 +328,7 @@ export default function SettingsScreen() {
                                 label="Data de Nascimento"
                                 placeholder="DD/MM/AAAA"
                                 value={dateOfBirth}
-                                onChangeText={setDateOfBirth}
+                                onChangeText={(value) => setDateOfBirth(formatDateOfBirthInput(value))}
                                 keyboardType="number-pad"
                                 style={styles.halfInput}
                             />
@@ -347,6 +341,9 @@ export default function SettingsScreen() {
                                 style={styles.halfInput}
                             />
                         </View>
+                        <TypographyText variant="bodySmall" color={Colors.textSecondary} style={styles.inputHint}>
+                            Digite apenas os numeros. O app formata automaticamente como DD/MM/AAAA.
+                        </TypographyText>
                         <View style={styles.row}>
                             <Input
                                 label="Peso Atual (kg)"
@@ -549,6 +546,7 @@ const styles = StyleSheet.create({
     objectiveBlock: { paddingTop: Spacing.sm },
     row: { flexDirection: 'row', gap: Spacing.sm },
     halfInput: { flex: 1 },
+    inputHint: { marginTop: -Spacing.xs },
     examRow: {
         flexDirection: 'row',
         alignItems: 'center',
