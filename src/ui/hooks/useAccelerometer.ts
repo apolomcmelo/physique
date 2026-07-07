@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 
 interface AccelerometerState {
@@ -17,18 +18,26 @@ export const useAccelerometer = (): AccelerometerState => {
     });
 
     useEffect(() => {
-        Accelerometer.setUpdateInterval(100);
+        if (Platform.OS === 'web') {
+            return;
+        }
 
-        const subscription = Accelerometer.addListener(({ x, y, z }) => {
-            setData({
-                x,
-                y,
-                z,
-                isLevel: Math.abs(x) < 0.1 && Math.abs(y) < 0.1,
+        try {
+            Accelerometer.setUpdateInterval(100);
+
+            const subscription = Accelerometer.addListener(({ x, y, z }) => {
+                setData({
+                    x,
+                    y,
+                    z,
+                    isLevel: Math.abs(x) < 0.1 && Math.abs(y) < 0.1,
+                });
             });
-        });
 
-        return () => subscription.remove();
+            return () => subscription.remove();
+        } catch {
+            return;
+        }
     }, []);
 
     return data;

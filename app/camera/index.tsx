@@ -6,6 +6,7 @@ import {
     TouchableOpacity,
     Text,
     Image,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -19,6 +20,7 @@ import { useAccelerometer } from '../../src/ui/hooks/useAccelerometer';
 import { BodyPhotoAngle, createBodyPhoto } from '../../src/domain/entities/BodyPhoto';
 import { arePhotosConsistent } from '../../src/domain/use-cases/photo/ArePhotosConsistent';
 import { supabase } from '../../src/infrastructure/supabase/client';
+import { isCameraSupported } from './support';
 
 const ANGLES: { key: BodyPhotoAngle; label: string }[] = [
     { key: 'front', label: 'Frente' },
@@ -26,6 +28,14 @@ const ANGLES: { key: BodyPhotoAngle; label: string }[] = [
     { key: 'left', label: 'Esquerda' },
     { key: 'right', label: 'Direita' },
 ];
+
+function getCameraSupportMessage() {
+    if (isCameraSupported(Platform.OS, globalThis.navigator?.mediaDevices)) {
+        return null;
+    }
+
+    return 'A câmera não está disponível neste navegador. Abra esta tela em um navegador com suporte a câmera ou use o app nativo.';
+}
 
 export default function CameraScreen() {
     const { photoRepo, userRepo } = useRepositories();
@@ -40,10 +50,7 @@ export default function CameraScreen() {
     const [error, setError] = useState<string | null>(null);
 
     const cameraRef = useRef<CameraView>(null);
-
-    useEffect(() => {
-        requestLocationPermission();
-    }, []);
+    const cameraSupportMessage = getCameraSupportMessage();
 
     useEffect(() => {
         loadPreviousPhoto(selectedAngle);
@@ -51,8 +58,15 @@ export default function CameraScreen() {
     }, [selectedAngle]);
 
     async function requestLocationPermission() {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        setLocationGranted(status === 'granted');
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            const granted = status === 'granted';
+            setLocationGranted(granted);
+            return granted;
+        } catch {
+            setLocationGranted(false);
+            return false;
+        }
     }
 
     async function loadPreviousPhoto(angle: BodyPhotoAngle) {
@@ -77,7 +91,12 @@ export default function CameraScreen() {
             // Get location
             let latitude: number | null = null;
             let longitude: number | null = null;
-            if (locationGranted) {
+            let hasLocationPermission = locationGranted;
+            if (!hasLocationPermission) {
+                hasLocationPermission = await requestLocationPermission();
+            }
+
+            if (hasLocationPermission) {
                 try {
                     const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
                     latitude = loc.coords.latitude;
@@ -137,10 +156,34 @@ export default function CameraScreen() {
 
             setPreviousPhotoUrl(fileUrl);
         } catch (e) {
+            console.warn('Camera capture failed', e);
             setError('Erro ao capturar foto');
         } finally {
             setCapturing(false);
         }
+    }
+
+    if (cameraSupportMessage) {
+        return (
+            <SafeAreaView style={styles.safe}>
+                <View style={styles.centered}>
+                    <TypographyText variant="h3" color={Colors.textPrimary}>
+                        Câmera indisponível
+                    </TypographyText>
+                    <TypographyText variant="body" color={Colors.textSecondary} style={{ textAlign: 'center' }}>
+                        {cameraSupportMessage}
+                    </TypographyText>
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Voltar"
+                        style={styles.permBtn}
+                        onPress={() => router.back()}
+                    >
+                        <Text style={[Typography.h4, { color: Colors.white }]}>Voltar</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
     }
 
     if (!cameraPermission) {
@@ -158,7 +201,12 @@ export default function CameraScreen() {
                     <TypographyText variant="h3" color={Colors.textPrimary}>
                         Permissão de câmera necessária
                     </TypographyText>
-                    <TouchableOpacity style={styles.permBtn} onPress={requestCameraPermission}>
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Permitir câmera"
+                        style={styles.permBtn}
+                        onPress={requestCameraPermission}
+                    >
                         <Text style={[Typography.h4, { color: Colors.white }]}>Permitir Câmera</Text>
                     </TouchableOpacity>
                 </View>
@@ -235,10 +283,17 @@ export default function CameraScreen() {
 
                 {/* Capture + Back */}
                 <View style={styles.captureRow}>
-                    <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Voltar"
+                        style={styles.backBtn}
+                        onPress={() => router.back()}
+                    >
                         <Text style={[Typography.label, { color: Colors.textSecondary }]}>← Voltar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Capturar foto"
                         style={[styles.captureBtn, capturing && styles.captureBtnDisabled]}
                         onPress={handleCapture}
                         disabled={capturing}
