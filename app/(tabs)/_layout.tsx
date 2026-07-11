@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { APP_TABS } from './tabConfig';
+import { APP_TABS } from '../../src/ui/navigation/tabConfig';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 

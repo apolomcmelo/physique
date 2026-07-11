@@ -1,4 +1,4 @@
-import { APP_TABS } from '../(tabs)/tabConfig';
+import { APP_TABS } from '../../src/ui/navigation/tabConfig';
 
 describe('tabs configuration', () => {
     it('includes a dedicated nutrition tab', () => {

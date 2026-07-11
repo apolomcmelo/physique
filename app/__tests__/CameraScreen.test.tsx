@@ -3,6 +3,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { router } from 'expo-router';
 
 const mockTakePictureAsync = jest.fn();
+const mockLaunchCameraAsync = jest.fn();
 const mockRequestCameraPermission = jest.fn();
 const mockRequestLocationPermission = jest.fn();
 const mockGetCurrentPositionAsync = jest.fn();
@@ -20,7 +21,7 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('../camera/support', () => ({
-    isCameraSupported: (...args: unknown[]) => mockIsCameraSupported(...args),
+    isCameraSupported: mockIsCameraSupported,
 }));
 
 jest.mock('expo-camera', () => {
@@ -29,6 +30,10 @@ jest.mock('expo-camera', () => {
 
     class MockCameraView extends React.Component<any> {
         takePictureAsync = mockTakePictureAsync;
+
+        componentDidMount() {
+            this.props.onCameraReady?.();
+        }
 
         render() {
             return React.createElement(View, this.props, this.props.children);
@@ -40,6 +45,13 @@ jest.mock('expo-camera', () => {
         useCameraPermissions: jest.fn(() => [mockCameraPermission, mockRequestCameraPermission]),
     };
 });
+
+jest.mock('expo-image-picker', () => ({
+    launchCameraAsync: (...args: unknown[]) => mockLaunchCameraAsync(...args),
+    MediaTypeOptions: {
+        Images: 'Images',
+    },
+}));
 
 jest.mock('expo-location', () => ({
     requestForegroundPermissionsAsync: (...args: unknown[]) => mockRequestLocationPermission(...args),
@@ -100,6 +112,7 @@ describe('CameraScreen', () => {
             },
         });
         mockTakePictureAsync.mockResolvedValue({ uri: 'file:///photo.jpg' });
+        mockLaunchCameraAsync.mockResolvedValue({ canceled: true, assets: [] });
         global.fetch = jest.fn(async () => ({
             blob: async () => ({
                 arrayBuffer: async () => new ArrayBuffer(0),

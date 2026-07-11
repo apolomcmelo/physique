@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
@@ -48,9 +49,26 @@ export default function CameraScreen() {
     const [capturing, setCapturing] = useState(false);
     const [consistencyResult, setConsistencyResult] = useState<{ consistent: boolean; reasons: string[] } | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [cameraReady, setCameraReady] = useState(false);
+    const [cameraMountError, setCameraMountError] = useState<string | null>(null);
 
     const cameraRef = useRef<CameraView>(null);
     const cameraSupportMessage = getCameraSupportMessage();
+
+    useEffect(() => {
+        if (!cameraPermission?.granted) {
+            setCameraReady(false);
+            return;
+        }
+
+        const timeout = setTimeout(() => {
+            if (!cameraReady && !cameraMountError) {
+                setCameraMountError('Não foi possível abrir a câmera do app neste dispositivo.');
+            }
+        }, 4500);
+
+        return () => clearTimeout(timeout);
+    }, [cameraPermission?.granted, cameraReady, cameraMountError]);
 
     useEffect(() => {
         loadPreviousPhoto(selectedAngle);
@@ -79,13 +97,30 @@ export default function CameraScreen() {
     }
 
     async function handleCapture() {
-        if (!cameraRef.current) return;
         try {
             setCapturing(true);
             setError(null);
             setConsistencyResult(null);
 
-            const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.8 });
+            let photo:
+                | {
+                    uri: string;
+                }
+                | null = null;
+
+            if (cameraRef.current && !cameraMountError) {
+                photo = (await cameraRef.current.takePictureAsync({ base64: true, quality: 0.8 })) ?? null;
+            } else {
+                const picked = await ImagePicker.launchCameraAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    quality: 0.8,
+                });
+
+                if (!picked.canceled && picked.assets[0]) {
+                    photo = { uri: picked.assets[0].uri };
+                }
+            }
+
             if (!photo?.uri) throw new Error('Captura falhou');
 
             // Get location
@@ -217,7 +252,19 @@ export default function CameraScreen() {
     return (
         <View style={styles.container}>
             {/* Camera */}
-            <CameraView ref={cameraRef} style={styles.camera} facing="back">
+            <CameraView
+                ref={cameraRef}
+                style={styles.camera}
+                facing="back"
+                onCameraReady={() => {
+                    setCameraReady(true);
+                    setCameraMountError(null);
+                }}
+                onMountError={(event) => {
+                    setCameraReady(false);
+                    setCameraMountError(event.message ?? 'Falha ao iniciar a câmera.');
+                }}
+            >
                 {/* Ghost overlay of previous photo */}
                 {previousPhotoUrl && (
                     <Image
@@ -255,6 +302,13 @@ export default function CameraScreen() {
                 {error && (
                     <View style={styles.errorBanner}>
                         <Text style={[Typography.bodySmall, { color: Colors.white }]}>{error}</Text>
+                    </View>
+                )}
+
+                {cameraMountError && (
+                    <View style={styles.errorBanner}>
+                        <Text style={[Typography.bodySmall, { color: Colors.white }]}>{cameraMountError}</Text>
+                        <Text style={[Typography.bodySmall, { color: Colors.white }]}>Toque em "Capturar" para abrir a câmera do sistema.</Text>
                     </View>
                 )}
             </CameraView>
