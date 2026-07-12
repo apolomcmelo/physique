@@ -41,6 +41,7 @@ function getCameraSupportMessage() {
 export default function CameraScreen() {
     const { photoRepo, userRepo } = useRepositories();
     const accelerometer = useAccelerometer();
+    const isWeb = Platform.OS === 'web';
 
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
     const [locationGranted, setLocationGranted] = useState(false);
@@ -108,7 +109,16 @@ export default function CameraScreen() {
                 }
                 | null = null;
 
-            if (cameraRef.current && !cameraMountError) {
+            if (isWeb) {
+                const picked = await ImagePicker.launchCameraAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    quality: 0.8,
+                });
+
+                if (!picked.canceled && picked.assets[0]) {
+                    photo = { uri: picked.assets[0].uri };
+                }
+            } else if (cameraRef.current && !cameraMountError) {
                 photo = (await cameraRef.current.takePictureAsync({ base64: true, quality: 0.8 })) ?? null;
             } else {
                 const picked = await ImagePicker.launchCameraAsync({
@@ -221,7 +231,7 @@ export default function CameraScreen() {
         );
     }
 
-    if (!cameraPermission) {
+    if (!isWeb && !cameraPermission) {
         return (
             <View style={styles.centered}>
                 <ActivityIndicator color={Colors.primary} />
@@ -229,7 +239,7 @@ export default function CameraScreen() {
         );
     }
 
-    if (!cameraPermission.granted) {
+    if (!isWeb && !cameraPermission?.granted) {
         return (
             <SafeAreaView style={styles.safe}>
                 <View style={styles.centered}>

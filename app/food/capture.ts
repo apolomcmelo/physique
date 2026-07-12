@@ -10,5 +10,10 @@ export function shouldOpenInAppCamera(
     platformOS: string,
     mediaDevices: { getUserMedia?: unknown } | undefined,
 ): boolean {
-    return platformOS === 'web' && hasBrowserCameraSupport(platformOS, mediaDevices);
+    // On web we prefer system camera via ImagePicker to preserve device camera features.
+    if (platformOS === 'web') {
+        return false;
+    }
+
+    return hasBrowserCameraSupport(platformOS, mediaDevices);
 }
