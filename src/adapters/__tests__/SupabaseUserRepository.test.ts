@@ -1,8 +1,15 @@
 import { SupabaseUserRepository } from '../supabase/SupabaseUserRepository';
 
 const mockFrom = jest.fn();
+const mockGetUser = jest.fn();
+
 jest.mock('../../infrastructure/supabase/client', () => ({
-    supabase: { from: (...args: unknown[]) => mockFrom(...args) },
+    supabase: {
+        auth: {
+            getUser: (...args: unknown[]) => mockGetUser(...args),
+        },
+        from: (...args: unknown[]) => mockFrom(...args),
+    },
 }));
 
 const baseRow = {
@@ -36,6 +43,7 @@ describe('SupabaseUserRepository', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockGetUser.mockResolvedValue({ data: { user: { id: 'auth-user-id' } }, error: null });
         repo = new SupabaseUserRepository();
     });
 
@@ -43,12 +51,14 @@ describe('SupabaseUserRepository', () => {
         it('returns null when the table is empty (no 406)', async () => {
             buildChain({ data: null, error: null });
             const result = await repo.getUser();
+            expect(mockGetUser).toHaveBeenCalled();
             expect(result).toBeNull();
         });
 
         it('returns a mapped User when a row exists', async () => {
-            buildChain({ data: baseRow, error: null });
+            const chain = buildChain({ data: baseRow, error: null });
             const user = await repo.getUser();
+            expect(chain.eq).toHaveBeenCalledWith('user_id', 'auth-user-id');
             expect(user).not.toBeNull();
             expect(user!.id).toBe('u1');
             expect(user!.name).toBe('Alice');
@@ -63,7 +73,7 @@ describe('SupabaseUserRepository', () => {
     });
 
     describe('saveUser()', () => {
-        it('inserts a row with a valid UUID v4 id', async () => {
+        it('inserts a row with a valid UUID v4 id and the authenticated user id', async () => {
             const chain = buildChain();
             const user = {
                 id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
@@ -82,6 +92,7 @@ describe('SupabaseUserRepository', () => {
             const insertedRow = chain.insert.mock.calls[0][0];
             // id must be the exact UUID passed — not a custom timestamp string
             expect(insertedRow.id).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
+            expect(insertedRow.user_id).toBe('auth-user-id');
         });
 
         it('serialises date_of_birth using local date, not UTC, to avoid off-by-one in negative UTC offsets', async () => {

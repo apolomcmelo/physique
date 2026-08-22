@@ -4,6 +4,7 @@ import { supabase } from '../../infrastructure/supabase/client';
 
 interface UserProfileRow {
     id: string;
+    user_id: string;
     name: string;
     date_of_birth: string;
     height_cm: number;
@@ -53,9 +54,20 @@ function userToRow(user: User): Omit<UserProfileRow, 'created_at' | 'updated_at'
 
 export class SupabaseUserRepository implements IUserRepository {
     async getUser(): Promise<User | null> {
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError) {
+            throw new Error(`Failed to get authenticated user: ${authError.message}`);
+        }
+
+        const authUserId = authData.user?.id;
+        if (!authUserId) {
+            return null;
+        }
+
         const { data, error } = await supabase
             .from('user_profiles')
             .select('*')
+            .eq('user_id', authUserId)
             .limit(1)
             .maybeSingle();
 
@@ -67,8 +79,19 @@ export class SupabaseUserRepository implements IUserRepository {
     }
 
     async saveUser(user: User): Promise<void> {
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError) {
+            throw new Error(`Failed to get authenticated user: ${authError.message}`);
+        }
+
+        const authUserId = authData.user?.id;
+        if (!authUserId) {
+            throw new Error('User must be authenticated before saving a profile');
+        }
+
         const row = {
             ...userToRow(user),
+            user_id: authUserId,
             created_at: user.createdAt.toISOString(),
         };
 
@@ -80,11 +103,25 @@ export class SupabaseUserRepository implements IUserRepository {
     }
 
     async updateUser(user: User): Promise<void> {
-        const row = userToRow(user);
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError) {
+            throw new Error(`Failed to get authenticated user: ${authError.message}`);
+        }
+
+        const authUserId = authData.user?.id;
+        if (!authUserId) {
+            throw new Error('User must be authenticated before updating a profile');
+        }
+
+        const row = {
+            ...userToRow(user),
+            user_id: authUserId,
+        };
 
         const { error } = await supabase
             .from('user_profiles')
             .update(row)
+            .eq('user_id', authUserId)
             .eq('id', user.id);
 
         if (error) {

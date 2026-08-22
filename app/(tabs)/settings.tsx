@@ -27,11 +27,13 @@ import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { Input } from '../../src/ui/components/Input';
 import { Typography as TypographyText } from '../../src/ui/components/Typography';
+import { useAuth } from '../../src/ui/hooks/useAuth';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Radius, Spacing, Typography } from '../../src/ui/theme';
 
 export default function SettingsScreen() {
     const { userRepo, examRepo, weightRepo, workoutRepo, mealRepo, foodRepo } = useRepositories();
+    const { session, signOut } = useAuth();
 
     const [user, setUser] = useState<User | null>(null);
     const [exams, setExams] = useState<Exam[]>([]);
@@ -81,6 +83,15 @@ export default function SettingsScreen() {
                 populateForm(u);
                 setEditMode(false);
             } else {
+                const googleName = typeof session?.user?.user_metadata?.full_name === 'string'
+                    ? session.user.user_metadata.full_name
+                    : typeof session?.user?.user_metadata?.name === 'string'
+                        ? session.user.user_metadata.name
+                        : '';
+
+                if (googleName) {
+                    setName(googleName);
+                }
                 setEditMode(true);
             }
         } catch {
@@ -144,6 +155,15 @@ export default function SettingsScreen() {
         if (user) populateForm(user);
         setError(null);
         setEditMode(false);
+    }
+
+    async function handleSignOut() {
+        try {
+            await signOut();
+            router.replace('/login' as never);
+        } catch {
+            setError('Erro ao sair da conta');
+        }
     }
 
     async function handleGenerateNewPlanPrompt() {
@@ -403,6 +423,17 @@ export default function SettingsScreen() {
                                 style={{ flex: 1 }}
                             />
                         </View>
+                    </Card>
+                )}
+
+                {/* ── ACCOUNT ── */}
+                {session && (
+                    <Card style={styles.card}>
+                        <Button
+                            label="Sair da conta"
+                            onPress={handleSignOut}
+                            variant="secondary"
+                        />
                     </Card>
                 )}
 
