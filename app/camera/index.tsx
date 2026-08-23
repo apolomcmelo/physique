@@ -21,6 +21,7 @@ import { useAccelerometer } from '../../src/ui/hooks/useAccelerometer';
 import { BodyPhotoAngle, createBodyPhoto } from '../../src/domain/entities/BodyPhoto';
 import { arePhotosConsistent } from '../../src/domain/use-cases/photo/ArePhotosConsistent';
 import { supabase } from '../../src/infrastructure/supabase/client';
+import { readFileAsArrayBuffer } from '../../src/infrastructure/supabase/readFileAsArrayBuffer';
 import { isCameraSupported } from './support';
 
 const ANGLES: { key: BodyPhotoAngle; label: string }[] = [
@@ -155,23 +156,21 @@ export default function CameraScreen() {
             const user = await userRepo.getUser();
             const now = new Date();
             const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            const storagePath = `photos/${user?.id ?? 'user'}/${monthYear}_${selectedAngle}_${Date.now()}.jpg`;
+            const storagePath = `${user?.id ?? 'user'}/${monthYear}_${selectedAngle}_${Date.now()}.jpg`;
 
             let fileUrl: string;
             if (process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true') {
                 fileUrl = photo.uri;
             } else {
-                const response = await fetch(photo.uri);
-                const blob = await response.blob();
-                const arrayBuffer = await blob.arrayBuffer();
+                const arrayBuffer = await readFileAsArrayBuffer(photo.uri);
 
                 const { error: uploadError } = await supabase.storage
-                    .from('body-photos')
+                    .from('photos')
                     .upload(storagePath, arrayBuffer, { contentType: 'image/jpeg' });
 
                 if (uploadError) throw new Error(uploadError.message);
 
-                const { data: publicData } = supabase.storage.from('body-photos').getPublicUrl(storagePath);
+                const { data: publicData } = supabase.storage.from('photos').getPublicUrl(storagePath);
                 fileUrl = publicData.publicUrl;
             }
 
