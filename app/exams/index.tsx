@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Exam, ExamFileType, createExam } from '../../src/domain/entities/Exam';
 import { supabase } from '../../src/infrastructure/supabase/client';
 import { buildExamStoragePath } from '../../src/infrastructure/supabase/storagePaths';
+import { buildExamStoragePath } from '../../src/infrastructure/supabase/storagePaths';
 import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { EmptyState } from '../../src/ui/components/EmptyState';

@@ -24,6 +24,7 @@ import {
 import { saveUserProfile } from '../../src/domain/use-cases/user/SaveUserProfile';
 import { supabase } from '../../src/infrastructure/supabase/client';
 import { buildExamStoragePath } from '../../src/infrastructure/supabase/storagePaths';
+import { buildExamStoragePath } from '../../src/infrastructure/supabase/storagePaths';
 import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { Input } from '../../src/ui/components/Input';
