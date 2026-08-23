@@ -23,7 +23,7 @@ import {
 } from '../../src/domain/use-cases/user/DateOfBirthInput';
 import { saveUserProfile } from '../../src/domain/use-cases/user/SaveUserProfile';
 import { supabase } from '../../src/infrastructure/supabase/client';
-import { buildExamStoragePath } from '../../src/infrastructure/supabase/storagePaths';
+import { readFileAsArrayBuffer } from '../../src/infrastructure/supabase/readFileAsArrayBuffer';
 import { buildExamStoragePath } from '../../src/infrastructure/supabase/storagePaths';
 import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
@@ -229,9 +229,7 @@ export default function SettingsScreen() {
             if (process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true') {
                 fileUrl = asset.uri;
             } else {
-                const response = await fetch(asset.uri);
-                const blob = await response.blob();
-                const arrayBuffer = await blob.arrayBuffer();
+                const arrayBuffer = await readFileAsArrayBuffer(asset.uri);
 
                 const { error: uploadError } = await supabase.storage
                     .from('exams')
