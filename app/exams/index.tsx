@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Exam, ExamFileType, createExam } from '../../src/domain/entities/Exam';
 import { supabase } from '../../src/infrastructure/supabase/client';
+import { buildExamStoragePath } from '../../src/infrastructure/supabase/storagePaths';
 import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { EmptyState } from '../../src/ui/components/EmptyState';
@@ -20,7 +21,7 @@ import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Radius, Spacing, Typography } from '../../src/ui/theme';
 
 export default function ExamsScreen() {
-    const { examRepo, userRepo } = useRepositories();
+    const { examRepo } = useRepositories();
     const [exams, setExams] = useState<Exam[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -55,10 +56,22 @@ export default function ExamsScreen() {
             if (result.canceled || !result.assets?.length) return;
 
             const asset = result.assets[0];
+            const { data: authData, error: authError } = await supabase.auth.getUser();
+
+            if (authError) {
+                throw new Error(authError.message);
+            }
+
+            const authUserId = authData.user?.id;
+
+            if (!authUserId) {
+                throw new Error('User is not authenticated');
+            }
+
             const fileName = asset.name ?? `exam_${Date.now()}`;
             const fileExt = fileName.split('.').pop()?.toLowerCase() ?? 'pdf';
             const fileType: ExamFileType = fileExt === 'pdf' ? 'pdf' : 'image';
-            const storagePath = `exams/${Date.now()}_${fileName}`;
+            const storagePath = buildExamStoragePath(authUserId, fileName);
 
             let fileUrl: string;
             if (process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true') {
@@ -80,10 +93,8 @@ export default function ExamsScreen() {
                 fileUrl = publicData.publicUrl;
             }
 
-            const user = await userRepo.getUser();
-
             const exam = createExam({
-                userId: user?.id ?? '',
+                userId: authUserId,
                 title: asset.name ?? `Exame ${new Date().toLocaleDateString('pt-BR')}`,
                 fileUrl,
                 uploadedAt: new Date(),
@@ -93,7 +104,8 @@ export default function ExamsScreen() {
             await examRepo.saveExam(exam);
             await loadExams();
         } catch (e) {
-            setError('Erro ao enviar exame');
+            const message = e instanceof Error ? e.message : 'Erro desconhecido';
+            setError(`Erro ao enviar exame: ${message}`);
         } finally {
             setUploading(false);
         }

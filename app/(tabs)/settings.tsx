@@ -23,6 +23,7 @@ import {
 } from '../../src/domain/use-cases/user/DateOfBirthInput';
 import { saveUserProfile } from '../../src/domain/use-cases/user/SaveUserProfile';
 import { supabase } from '../../src/infrastructure/supabase/client';
+import { buildExamStoragePath } from '../../src/infrastructure/supabase/storagePaths';
 import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { Input } from '../../src/ui/components/Input';
@@ -211,10 +212,17 @@ export default function SettingsScreen() {
             if (result.canceled || !result.assets?.length) return;
 
             const asset = result.assets[0];
+            const authUserIdFromSession = session?.user?.id;
+            const authUserId = authUserIdFromSession ?? (await supabase.auth.getUser()).data.user?.id;
+
+            if (!authUserId) {
+                throw new Error('User is not authenticated');
+            }
+
             const fileName = asset.name ?? `exam_${Date.now()}`;
             const fileExt = fileName.split('.').pop()?.toLowerCase() ?? 'pdf';
             const fileType: ExamFileType = fileExt === 'pdf' ? 'pdf' : 'image';
-            const storagePath = `exams/${Date.now()}_${fileName}`;
+            const storagePath = buildExamStoragePath(authUserId, fileName);
 
             let fileUrl: string;
             if (process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true') {
@@ -235,7 +243,7 @@ export default function SettingsScreen() {
             }
 
             const exam = createExam({
-                userId: user?.id ?? '',
+                userId: authUserId,
                 title: asset.name ?? `Exame ${new Date().toLocaleDateString('pt-BR')}`,
                 fileUrl,
                 uploadedAt: new Date(),
@@ -245,8 +253,9 @@ export default function SettingsScreen() {
             await examRepo.saveExam(exam);
             const updated = await examRepo.getExams();
             setExams(updated);
-        } catch {
-            setError('Erro ao enviar exame');
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Erro desconhecido';
+            setError(`Erro ao enviar exame: ${message}`);
         } finally {
             setUploadingExam(false);
         }
