@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Exam, ExamFileType, createExam } from '../../src/domain/entities/Exam';
 import { supabase } from '../../src/infrastructure/supabase/client';
+import { buildExamStoragePath } from '../../src/infrastructure/supabase/storagePaths';
 import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { EmptyState } from '../../src/ui/components/EmptyState';
@@ -55,10 +56,16 @@ export default function ExamsScreen() {
             if (result.canceled || !result.assets?.length) return;
 
             const asset = result.assets[0];
+            const user = await userRepo.getUser();
+
+            if (!user?.id) {
+                throw new Error('User is not authenticated');
+            }
+
             const fileName = asset.name ?? `exam_${Date.now()}`;
             const fileExt = fileName.split('.').pop()?.toLowerCase() ?? 'pdf';
             const fileType: ExamFileType = fileExt === 'pdf' ? 'pdf' : 'image';
-            const storagePath = `exams/${Date.now()}_${fileName}`;
+            const storagePath = buildExamStoragePath(user.id, fileName);
 
             let fileUrl: string;
             if (process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true') {
@@ -80,10 +87,8 @@ export default function ExamsScreen() {
                 fileUrl = publicData.publicUrl;
             }
 
-            const user = await userRepo.getUser();
-
             const exam = createExam({
-                userId: user?.id ?? '',
+                userId: user.id,
                 title: asset.name ?? `Exame ${new Date().toLocaleDateString('pt-BR')}`,
                 fileUrl,
                 uploadedAt: new Date(),
