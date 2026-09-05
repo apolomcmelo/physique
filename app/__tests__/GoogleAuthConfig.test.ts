@@ -7,16 +7,12 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
     },
 }));
 
-jest.mock('react-native', () => {
-    const actual = jest.requireActual('react-native');
-    return {
-        ...actual,
-        Platform: {
-            ...actual.Platform,
-            OS: 'web',
-        },
-    };
-});
+jest.mock('react-native', () => ({
+    NativeModules: {},
+    Platform: {
+        OS: 'web',
+    },
+}));
 
 jest.mock('@supabase/supabase-js', () => ({
     createClient: jest.fn(() => ({

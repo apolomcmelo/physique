@@ -22,7 +22,7 @@ import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Radius, Spacing, Typography } from '../../src/ui/theme';
 
 export default function ExamsScreen() {
-    const { examRepo } = useRepositories();
+    const { examRepo, userRepo } = useRepositories();
     const [exams, setExams] = useState<Exam[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -57,13 +57,7 @@ export default function ExamsScreen() {
             if (result.canceled || !result.assets?.length) return;
 
             const asset = result.assets[0];
-            const { data: authData, error: authError } = await supabase.auth.getUser();
-
-            if (authError) {
-                throw new Error(authError.message);
-            }
-
-            const authUserId = authData.user?.id;
+            const authUserId = await userRepo.getCurrentUserId();
 
             if (!authUserId) {
                 throw new Error('User is not authenticated');

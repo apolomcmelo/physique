@@ -153,10 +153,13 @@ export default function CameraScreen() {
             }
 
             // Upload to Supabase Storage
-            const user = await userRepo.getUser();
+            const currentUserId = await userRepo.getCurrentUserId();
+            if (!currentUserId) {
+                throw new Error('Usuário não autenticado');
+            }
             const now = new Date();
             const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            const storagePath = `${user?.id ?? 'user'}/${monthYear}_${selectedAngle}_${Date.now()}.jpg`;
+            const storagePath = `${currentUserId}/${monthYear}_${selectedAngle}_${Date.now()}.jpg`;
 
             let fileUrl: string;
             if (process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true') {
@@ -178,7 +181,7 @@ export default function CameraScreen() {
             const previous = await photoRepo.getLatestPhotoByAngle(selectedAngle);
 
             const bodyPhoto = createBodyPhoto({
-                userId: user?.id ?? '',
+                userId: currentUserId,
                 capturedAt: now,
                 angle: selectedAngle,
                 fileUrl,

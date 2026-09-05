@@ -24,7 +24,7 @@ import { recordWeight } from '../../src/domain/use-cases/weight/RecordWeight';
 type HistoryTab = 'weight' | 'workouts' | 'meals';
 
 export default function HistoryScreen() {
-    const { weightRepo, workoutRepo, mealRepo } = useRepositories();
+    const { weightRepo, workoutRepo, mealRepo, userRepo } = useRepositories();
     const [activeTab, setActiveTab] = useState<HistoryTab>('weight');
 
     const [weightHistory, setWeightHistory] = useState<WeightRecord[]>([]);
@@ -69,7 +69,13 @@ export default function HistoryScreen() {
         const prot = proteinInput ? parseFloat(proteinInput) : null;
         try {
             setSavingWeight(true);
-            await recordWeight(weightRepo, kg, bf, prot);
+            setError(null);
+            const userId = await userRepo.getCurrentUserId();
+            if (!userId) {
+                setError('É necessário estar logado para registrar peso');
+                return;
+            }
+            await recordWeight(weightRepo, userId, kg, bf, prot);
             const updated = await weightRepo.getWeightHistory();
             setWeightHistory(updated.sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime()));
             setWeightInput('');

@@ -3,14 +3,13 @@ import { IWeightRepository } from '../../ports/WeightRepository';
 
 export async function recordWeight(
     repo: IWeightRepository,
+    userId: string,
     weightKg: number,
     bodyFatPercentage: number | null,
     proteinPercentage: number | null,
 ): Promise<WeightRecord> {
-    const latestUser = await repo.getLatestWeight();
-
     const record = createWeightRecord({
-        userId: latestUser?.userId ?? '',
+        userId,
         weightKg,
         bodyFatPercentage,
         proteinPercentage,

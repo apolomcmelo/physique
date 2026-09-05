@@ -33,7 +33,7 @@ function rowToUser(row: UserProfileRow): User {
     };
 }
 
-function userToRow(user: User): Omit<UserProfileRow, 'created_at' | 'updated_at'> & { updated_at: string } {
+function userToRow(user: User): Omit<UserProfileRow, 'user_id' | 'created_at' | 'updated_at'> & { updated_at: string } {
     return {
         id: user.id,
         name: user.name,
@@ -53,6 +53,11 @@ function userToRow(user: User): Omit<UserProfileRow, 'created_at' | 'updated_at'
 }
 
 export class SupabaseUserRepository implements IUserRepository {
+    async getCurrentUserId(): Promise<string | null> {
+        const { data } = await supabase.auth.getUser();
+        return data.user?.id ?? null;
+    }
+
     async getUser(): Promise<User | null> {
         const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError) {

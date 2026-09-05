@@ -213,8 +213,7 @@ export default function SettingsScreen() {
             if (result.canceled || !result.assets?.length) return;
 
             const asset = result.assets[0];
-            const authUserIdFromSession = session?.user?.id;
-            const authUserId = authUserIdFromSession ?? (await supabase.auth.getUser()).data.user?.id;
+            const authUserId = await userRepo.getCurrentUserId();
 
             if (!authUserId) {
                 throw new Error('User is not authenticated');

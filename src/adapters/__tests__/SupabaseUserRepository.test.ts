@@ -54,7 +54,6 @@ describe('SupabaseUserRepository', () => {
             expect(mockGetUser).toHaveBeenCalled();
             expect(result).toBeNull();
         });
-
         it('returns a mapped User when a row exists', async () => {
             const chain = buildChain({ data: baseRow, error: null });
             const user = await repo.getUser();
@@ -69,6 +68,28 @@ describe('SupabaseUserRepository', () => {
         it('throws when Supabase returns an error', async () => {
             buildChain({ data: null, error: { message: 'db error' } });
             await expect(repo.getUser()).rejects.toThrow('Failed to get user: db error');
+        });
+    });
+
+    describe('getCurrentUserId()', () => {
+        it('returns the authenticated user id', async () => {
+            await expect(repo.getCurrentUserId()).resolves.toBe('auth-user-id');
+            expect(mockGetUser).toHaveBeenCalled();
+        });
+
+        it('returns null when there is no authenticated session', async () => {
+            mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+
+            await expect(repo.getCurrentUserId()).resolves.toBeNull();
+        });
+
+        it('returns null when the auth call fails (e.g. missing session)', async () => {
+            mockGetUser.mockResolvedValue({
+                data: { user: null },
+                error: { message: 'Auth session missing!' },
+            });
+
+            await expect(repo.getCurrentUserId()).resolves.toBeNull();
         });
     });
 

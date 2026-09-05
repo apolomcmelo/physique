@@ -10,6 +10,7 @@ const mockGetCurrentPositionAsync = jest.fn();
 const mockGetLatestPhotoByAngle = jest.fn();
 const mockSaveBodyPhoto = jest.fn();
 const mockGetUser = jest.fn();
+const mockGetCurrentUserId = jest.fn();
 
 let mockCameraPermission: { granted: boolean } = { granted: true };
 const mockIsCameraSupported = jest.fn(() => true);
@@ -78,6 +79,7 @@ jest.mock('../../src/ui/hooks/useSupabase', () => ({
         },
         userRepo: {
             getUser: mockGetUser,
+            getCurrentUserId: mockGetCurrentUserId,
         },
     }),
 }));
@@ -93,6 +95,12 @@ jest.mock('../../src/infrastructure/supabase/client', () => ({
     },
 }));
 
+// babel-preset-expo inlines EXPO_PUBLIC_* at transform time, so the runtime env
+// assignment in beforeEach cannot switch branches; mock the file reader instead.
+jest.mock('../../src/infrastructure/supabase/readFileAsArrayBuffer', () => ({
+    readFileAsArrayBuffer: jest.fn(async () => new ArrayBuffer(0)),
+}));
+
 const CameraScreen = require('../camera/index').default;
 
 describe('CameraScreen', () => {
@@ -104,6 +112,7 @@ describe('CameraScreen', () => {
         mockGetLatestPhotoByAngle.mockResolvedValue(null);
         mockSaveBodyPhoto.mockResolvedValue(undefined);
         mockGetUser.mockResolvedValue({ id: 'user-1' });
+        mockGetCurrentUserId.mockResolvedValue('user-1');
         mockRequestLocationPermission.mockResolvedValue({ status: 'denied' });
         mockGetCurrentPositionAsync.mockResolvedValue({
             coords: {
@@ -139,8 +148,23 @@ describe('CameraScreen', () => {
         await waitFor(() => expect(mockTakePictureAsync).toHaveBeenCalledTimes(1));
         await waitFor(() => expect(mockSaveBodyPhoto).toHaveBeenCalledTimes(1));
 
+        expect(mockSaveBodyPhoto.mock.calls[0][0].userId).toBe('user-1');
         expect(mockGetCurrentPositionAsync).not.toHaveBeenCalled();
         expect(screen.queryByText('Erro ao capturar foto')).toBeNull();
+    });
+
+    it('does not save a photo when there is no authenticated user', async () => {
+        mockGetCurrentUserId.mockResolvedValue(null);
+
+        const screen = render(<CameraScreen />);
+
+        fireEvent.press(screen.getByLabelText('Capturar foto'));
+
+        await waitFor(() => expect(mockTakePictureAsync).toHaveBeenCalledTimes(1));
+        await waitFor(() =>
+            expect(screen.queryByText('Erro ao capturar foto')).not.toBeNull()
+        );
+        expect(mockSaveBodyPhoto).not.toHaveBeenCalled();
     });
 
     it('shows a recovery message when browser camera support is unavailable', () => {
