@@ -16,12 +16,84 @@ import { EmptyState } from '../../src/ui/components/EmptyState';
 import { Typography as TypographyText } from '../../src/ui/components/Typography';
 import { Colors, Spacing } from '../../src/ui/theme';
 import { MealPlanEntry } from '../../src/domain/entities/MealPlan';
+import { Workout, WorkoutType } from '../../src/domain/entities/Workout';
 import { parseCsvMealPlan } from '../../src/domain/use-cases/meal/ParseCsvMealPlan';
 import { parseCsvWorkouts } from '../../src/domain/use-cases/workout/ParseCsvWorkouts';
+
+interface TimelineItem {
+    id: string;
+    day: string;
+    time: string;
+    activity: string;
+    description: string;
+    objective: string | null;
+}
+
+const WEEKDAY_LABELS = [
+    'Domingo',
+    'Segunda-feira',
+    'Terça-feira',
+    'Quarta-feira',
+    'Quinta-feira',
+    'Sexta-feira',
+    'Sábado',
+];
+
+const DAY_ORDER: Record<string, number> = {
+    'segunda-feira': 0,
+    'terça-feira': 1,
+    'terca-feira': 1,
+    'quarta-feira': 2,
+    'quinta-feira': 3,
+    'sexta-feira': 4,
+    'sábado': 5,
+    'sabado': 5,
+    'domingo': 6,
+};
+
+const WORKOUT_TYPE_LABEL: Record<WorkoutType, string> = {
+    Calisthenics: 'Calistenia',
+    Weightlifting: 'Musculação',
+    HIT: 'HIT',
+};
+
+function workoutToTimelineItem(workout: Workout): TimelineItem {
+    const at = workout.scheduledAt;
+    return {
+        id: workout.id,
+        day: at ? WEEKDAY_LABELS[at.getDay()] : '',
+        time: at ? at.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+        activity: WORKOUT_TYPE_LABEL[workout.type],
+        description: workout.name,
+        objective: null,
+    };
+}
+
+function buildTimeline(entries: MealPlanEntry[], workouts: Workout[]): TimelineItem[] {
+    const items: TimelineItem[] = [
+        ...entries.map((e) => ({
+            id: e.id,
+            day: e.day,
+            time: e.time,
+            activity: e.activity,
+            description: e.description,
+            objective: e.biologicalObjective,
+        })),
+        ...workouts.map(workoutToTimelineItem),
+    ];
+
+    return items.sort((a, b) => {
+        const dayA = DAY_ORDER[a.day.trim().toLowerCase()] ?? 99;
+        const dayB = DAY_ORDER[b.day.trim().toLowerCase()] ?? 99;
+        if (dayA !== dayB) return dayA - dayB;
+        return a.time.localeCompare(b.time);
+    });
+}
 
 export default function PlanScreen() {
     const { mealRepo, workoutRepo } = useRepositories();
     const [entries, setEntries] = useState<MealPlanEntry[]>([]);
+    const [workouts, setWorkouts] = useState<Workout[]>([]);
     const [loading, setLoading] = useState(true);
     const [importing, setImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -33,8 +105,12 @@ export default function PlanScreen() {
     async function loadEntries() {
         try {
             setLoading(true);
-            const data = await mealRepo.getMealPlanEntries();
-            setEntries(data);
+            const [mealEntries, workoutList] = await Promise.all([
+                mealRepo.getMealPlanEntries(),
+                workoutRepo.getWorkouts(),
+            ]);
+            setEntries(mealEntries);
+            setWorkouts(workoutList);
         } catch {
             setError('Erro ao carregar plano');
         } finally {
@@ -71,8 +147,9 @@ export default function PlanScreen() {
             }
 
             await loadEntries();
-        } catch {
-            setError('Erro ao importar CSV');
+        } catch (err) {
+            const detail = err instanceof Error ? err.message : '';
+            setError(detail ? `Erro ao importar CSV: ${detail}` : 'Erro ao importar CSV');
         } finally {
             setImporting(false);
         }
@@ -85,6 +162,8 @@ export default function PlanScreen() {
             </View>
         );
     }
+
+    const timeline = buildTimeline(entries, workouts);
 
     return (
         <SafeAreaView style={styles.safe}>
@@ -109,11 +188,11 @@ export default function PlanScreen() {
                 </TypographyText>
             )}
 
-            {entries.length === 0 ? (
+            {timeline.length === 0 ? (
                 <EmptyState
                     icon="🍽️"
                     title="Sem plano"
-                    message="Importe um arquivo CSV para criar seu plano de refeições."
+                    message="Importe um arquivo CSV para criar seu plano de refeições e treinos."
                     action={{ label: 'Importar CSV', onPress: handleImportCsv }}
                 />
             ) : (
@@ -122,29 +201,31 @@ export default function PlanScreen() {
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                 >
-                    {entries.map((entry) => (
-                        <Card key={entry.id} style={styles.entryCard}>
+                    {timeline.map((item) => (
+                        <Card key={item.id} style={styles.entryCard}>
                             <View style={styles.entryHeader}>
                                 <TypographyText variant="h4" color={Colors.primary}>
-                                    {entry.time}
+                                    {item.time}
                                 </TypographyText>
                                 <TypographyText variant="label" color={Colors.textSecondary}>
-                                    {entry.day}
+                                    {item.day}
                                 </TypographyText>
                             </View>
                             <TypographyText variant="h4" color={Colors.textPrimary} style={{ marginTop: Spacing.xs }}>
-                                {entry.activity}
+                                {item.activity}
                             </TypographyText>
                             <TypographyText variant="body" color={Colors.textSecondary} style={{ marginTop: 2 }}>
-                                {entry.description}
+                                {item.description}
                             </TypographyText>
-                            <TypographyText
-                                variant="bodySmall"
-                                color={Colors.textDisabled}
-                                style={styles.objective}
-                            >
-                                {entry.biologicalObjective}
-                            </TypographyText>
+                            {item.objective ? (
+                                <TypographyText
+                                    variant="bodySmall"
+                                    color={Colors.textDisabled}
+                                    style={styles.objective}
+                                >
+                                    {item.objective}
+                                </TypographyText>
+                            ) : null}
                         </Card>
                     ))}
                 </ScrollView>

@@ -2,6 +2,7 @@ import { IWorkoutRepository } from '../../domain/ports/WorkoutRepository';
 import { Workout, Exercise, WorkoutType } from '../../domain/entities/Workout';
 import { WorkoutSession, CompletedSet } from '../../domain/entities/WorkoutSession';
 import { supabase } from '../../infrastructure/supabase/client';
+import { requireAuthUserId } from './currentAuthUser';
 
 // ── Row types ────────────────────────────────────────────────────────────────
 
@@ -122,6 +123,7 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
     }
 
     async saveWorkout(workout: Workout): Promise<void> {
+        const userId = await requireAuthUserId();
         const { error: workoutError } = await supabase.from('workouts').insert({
             id: workout.id,
             name: workout.name,
@@ -129,6 +131,7 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
             scheduled_at: workout.scheduledAt?.toISOString() ?? null,
             created_at: workout.createdAt.toISOString(),
             updated_at: workout.updatedAt.toISOString(),
+            user_id: userId,
         });
 
         if (workoutError) {
@@ -156,6 +159,7 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
     }
 
     async updateWorkout(workout: Workout): Promise<void> {
+        const userId = await requireAuthUserId();
         const { error: workoutError } = await supabase
             .from('workouts')
             .upsert({
@@ -165,6 +169,7 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
                 scheduled_at: workout.scheduledAt?.toISOString() ?? null,
                 created_at: workout.createdAt.toISOString(),
                 updated_at: new Date().toISOString(),
+                user_id: userId,
             });
 
         if (workoutError) {
@@ -210,12 +215,14 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
     }
 
     async saveWorkoutSession(session: WorkoutSession): Promise<void> {
+        const userId = await requireAuthUserId();
         const { error: sessionError } = await supabase.from('workout_sessions').insert({
             id: session.id,
             workout_id: session.workoutId,
             started_at: session.startedAt.toISOString(),
             finished_at: session.finishedAt?.toISOString() ?? null,
             created_at: new Date().toISOString(),
+            user_id: userId,
         });
 
         if (sessionError) {
@@ -231,6 +238,7 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
                 reps_completed: s.repsCompleted,
                 weight_used_kg: s.weightUsedKg,
                 completed_at: s.completedAt.toISOString(),
+                user_id: userId,
             }));
 
             const { error: setsError } = await supabase.from('completed_sets').insert(setRows);

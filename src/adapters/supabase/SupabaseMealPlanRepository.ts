@@ -1,6 +1,7 @@
 import { IMealPlanRepository } from '../../domain/ports/MealPlanRepository';
 import { MealPlanEntry } from '../../domain/entities/MealPlan';
 import { supabase } from '../../infrastructure/supabase/client';
+import { requireAuthUserId } from './currentAuthUser';
 
 interface MealPlanEntryRow {
     id: string;
@@ -53,9 +54,11 @@ export class SupabaseMealPlanRepository implements IMealPlanRepository {
             return;
         }
 
+        const userId = await requireAuthUserId();
         const rows = entries.map((e) => ({
             ...entryToRow(e),
             created_at: new Date().toISOString(),
+            user_id: userId,
         }));
 
         const { error } = await supabase.from('meal_plan_entries').insert(rows);

@@ -1,6 +1,7 @@
 import { IFoodItemRepository } from '../../domain/ports/FoodItemRepository';
 import { FoodItem } from '../../domain/entities/FoodItem';
 import { supabase } from '../../infrastructure/supabase/client';
+import { requireAuthUserId } from './currentAuthUser';
 
 interface FoodItemRow {
     id: string;
@@ -63,7 +64,10 @@ export class SupabaseFoodItemRepository implements IFoodItemRepository {
     }
 
     async saveFoodItem(item: FoodItem): Promise<void> {
-        const { error } = await supabase.from('food_items').insert(foodItemToRow(item));
+        const userId = await requireAuthUserId();
+        const { error } = await supabase
+            .from('food_items')
+            .insert({ ...foodItemToRow(item), user_id: userId });
 
         if (error) {
             throw new Error(`Failed to save food item: ${error.message}`);
