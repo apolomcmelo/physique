@@ -1,5 +1,6 @@
 import { SupabaseWorkoutRepository } from '../supabase/SupabaseWorkoutRepository';
 import { Workout } from '../../domain/entities/Workout';
+import { WorkoutSession } from '../../domain/entities/WorkoutSession';
 
 const mockFrom = jest.fn();
 jest.mock('../../infrastructure/supabase/client', () => ({
@@ -133,6 +134,57 @@ describe('SupabaseWorkoutRepository', () => {
             chain.eq.mockResolvedValue({ error: { message: 'not allowed' } });
             await expect(repo.deleteWorkout('w1')).rejects.toThrow(
                 'Failed to delete workout: not allowed',
+            );
+        });
+    });
+
+    describe('saveWorkoutSession()', () => {
+        const baseSession: WorkoutSession = {
+            id: 's1',
+            workoutId: 'w1',
+            startedAt: new Date('2024-01-01T10:00:00.000Z'),
+            finishedAt: null,
+            sets: [],
+        };
+
+        it('upserts the session so repeated calls with the same id do not conflict', async () => {
+            const chain = buildChain();
+            await repo.saveWorkoutSession(baseSession);
+            await repo.saveWorkoutSession(baseSession);
+            expect(mockFrom).toHaveBeenCalledWith('workout_sessions');
+            expect(chain.upsert).toHaveBeenCalledWith(
+                expect.objectContaining({ id: 's1', user_id: 'auth-user-1' }),
+            );
+            expect(chain.insert).not.toHaveBeenCalled();
+        });
+
+        it('upserts completed sets appended across successive calls', async () => {
+            const chain = buildChain();
+            const withOneSet: WorkoutSession = {
+                ...baseSession,
+                sets: [
+                    {
+                        id: 'set1',
+                        exerciseId: 'ex1',
+                        setNumber: 1,
+                        repsCompleted: 10,
+                        weightUsedKg: 20,
+                        completedAt: new Date('2024-01-01T10:05:00.000Z'),
+                    },
+                ],
+            };
+            await repo.saveWorkoutSession(withOneSet);
+            expect(mockFrom).toHaveBeenCalledWith('completed_sets');
+            expect(chain.upsert).toHaveBeenCalledWith([
+                expect.objectContaining({ id: 'set1', user_id: 'auth-user-1' }),
+            ]);
+        });
+
+        it('throws when the session upsert fails', async () => {
+            const chain = buildChain();
+            chain.upsert.mockResolvedValue({ error: { message: 'conflict' } });
+            await expect(repo.saveWorkoutSession(baseSession)).rejects.toThrow(
+                'Failed to save workout session: conflict',
             );
         });
     });

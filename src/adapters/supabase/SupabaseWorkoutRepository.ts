@@ -220,12 +220,12 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
 
     async saveWorkoutSession(session: WorkoutSession): Promise<void> {
         const userId = await requireAuthUserId();
-        const { error: sessionError } = await supabase.from('workout_sessions').insert({
+        // upsert: this is called repeatedly for the same session (start, each set, finish)
+        const { error: sessionError } = await supabase.from('workout_sessions').upsert({
             id: session.id,
             workout_id: session.workoutId,
             started_at: session.startedAt.toISOString(),
             finished_at: session.finishedAt?.toISOString() ?? null,
-            created_at: new Date().toISOString(),
             user_id: userId,
         });
 
@@ -245,7 +245,7 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
                 user_id: userId,
             }));
 
-            const { error: setsError } = await supabase.from('completed_sets').insert(setRows);
+            const { error: setsError } = await supabase.from('completed_sets').upsert(setRows);
 
             if (setsError) {
                 throw new Error(`Failed to save completed sets: ${setsError.message}`);

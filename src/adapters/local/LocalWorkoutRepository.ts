@@ -62,7 +62,12 @@ export class LocalWorkoutRepository implements IWorkoutRepository {
 
     async saveWorkoutSession(session: WorkoutSession): Promise<void> {
         const sessions = await getItem<WorkoutSession[]>(SESSIONS_KEY) ?? [];
-        sessions.push(session);
+        const index = sessions.findIndex((s) => s.id === session.id);
+        if (index !== -1) {
+            sessions[index] = session;
+        } else {
+            sessions.push(session);
+        }
         await setItem(SESSIONS_KEY, sessions);
     }
 
