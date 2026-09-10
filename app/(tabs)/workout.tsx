@@ -27,6 +27,16 @@ interface ExerciseForm {
     weight: string;
 }
 
+/** Earliest scheduled workout first; unscheduled workouts go last. */
+function sortWorkoutsByScheduledAt(workouts: Workout[]): Workout[] {
+    return [...workouts].sort((a, b) => {
+        if (!a.scheduledAt && !b.scheduledAt) return 0;
+        if (!a.scheduledAt) return 1;
+        if (!b.scheduledAt) return -1;
+        return a.scheduledAt.getTime() - b.scheduledAt.getTime();
+    });
+}
+
 export default function WorkoutScreen() {
     const { workoutRepo } = useRepositories();
     const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -53,7 +63,7 @@ export default function WorkoutScreen() {
         try {
             setLoading(true);
             const data = await workoutRepo.getWorkouts();
-            setWorkouts(data);
+            setWorkouts(sortWorkoutsByScheduledAt(data));
         } catch {
             setError('Erro ao carregar treinos');
         } finally {

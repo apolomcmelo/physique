@@ -51,6 +51,23 @@ const DAY_ORDER: Record<string, number> = {
     'domingo': 6,
 };
 
+const FILTER_OPTIONS: { key: string; label: string }[] = [
+    { key: 'today', label: 'Hoje' },
+    { key: '0', label: 'Segunda' },
+    { key: '1', label: 'Terça' },
+    { key: '2', label: 'Quarta' },
+    { key: '3', label: 'Quinta' },
+    { key: '4', label: 'Sexta' },
+    { key: '5', label: 'Sábado' },
+    { key: '6', label: 'Domingo' },
+    { key: 'all', label: 'Todos' },
+];
+
+/** Converts JS Date.getDay() (0=Sunday) to our Monday-first day order (0=Monday). */
+function todayDayOrder(): number {
+    return (new Date().getDay() + 6) % 7;
+}
+
 const WORKOUT_TYPE_LABEL: Record<WorkoutType, string> = {
     Calisthenics: 'Calistenia',
     Weightlifting: 'Musculação',
@@ -97,6 +114,7 @@ export default function PlanScreen() {
     const [loading, setLoading] = useState(true);
     const [importing, setImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [dayFilter, setDayFilter] = useState('today');
 
     useEffect(() => {
         loadEntries();
@@ -164,6 +182,11 @@ export default function PlanScreen() {
     }
 
     const timeline = buildTimeline(entries, workouts);
+    const selectedOrder = dayFilter === 'all' ? null : dayFilter === 'today' ? todayDayOrder() : parseInt(dayFilter, 10);
+    const filteredTimeline =
+        selectedOrder === null
+            ? timeline
+            : timeline.filter((item) => (DAY_ORDER[item.day.trim().toLowerCase()] ?? -1) === selectedOrder);
 
     return (
         <SafeAreaView style={styles.safe}>
@@ -188,6 +211,28 @@ export default function PlanScreen() {
                 </TypographyText>
             )}
 
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filterRow}
+                contentContainerStyle={styles.filterRowContent}
+            >
+                {FILTER_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                        key={option.key}
+                        style={[styles.filterChip, dayFilter === option.key && styles.filterChipActive]}
+                        onPress={() => setDayFilter(option.key)}
+                    >
+                        <TypographyText
+                            variant="label"
+                            color={dayFilter === option.key ? Colors.white : Colors.textSecondary}
+                        >
+                            {option.label}
+                        </TypographyText>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
+
             {timeline.length === 0 ? (
                 <EmptyState
                     icon="🍽️"
@@ -195,13 +240,19 @@ export default function PlanScreen() {
                     message="Importe um arquivo CSV para criar seu plano de refeições e treinos."
                     action={{ label: 'Importar CSV', onPress: handleImportCsv }}
                 />
+            ) : filteredTimeline.length === 0 ? (
+                <EmptyState
+                    icon="📅"
+                    title="Nada por aqui"
+                    message="Nenhuma atividade cadastrada para esse dia."
+                />
             ) : (
                 <ScrollView
                     style={styles.list}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                 >
-                    {timeline.map((item) => (
+                    {filteredTimeline.map((item) => (
                         <Card key={item.id} style={styles.entryCard}>
                             <View style={styles.entryHeader}>
                                 <TypographyText variant="h4" color={Colors.primary}>
@@ -254,6 +305,20 @@ const styles = StyleSheet.create({
     },
     importBtnDisabled: { opacity: 0.5 },
     errorText: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
+    filterRow: { flexGrow: 0, marginBottom: Spacing.sm },
+    filterRowContent: { paddingHorizontal: Spacing.md, gap: Spacing.xs },
+    filterChip: {
+        paddingVertical: Spacing.xs,
+        paddingHorizontal: Spacing.sm,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        marginRight: Spacing.xs,
+    },
+    filterChipActive: {
+        backgroundColor: Colors.primary,
+        borderColor: Colors.primary,
+    },
     list: { flex: 1 },
     listContent: { padding: Spacing.md, gap: Spacing.sm },
     entryCard: { gap: 2 },
