@@ -29,6 +29,7 @@ export const mockWorkout: Workout = {
             sets: 3,
             repsPerSet: 10,
             weightKg: 60,
+            durationSeconds: null,
             notes: null,
         },
         {
@@ -37,6 +38,7 @@ export const mockWorkout: Workout = {
             sets: 3,
             repsPerSet: 8,
             weightKg: null,
+            durationSeconds: null,
             notes: 'Bodyweight',
         },
     ],

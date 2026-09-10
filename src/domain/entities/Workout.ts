@@ -6,6 +6,8 @@ export interface Exercise {
     sets: number | null;
     repsPerSet: number | null;
     weightKg: number | null;
+    /** Duration of one set in seconds, for time-based sets (e.g. 45s plank). */
+    durationSeconds: number | null;
     notes: string | null;
 }
 

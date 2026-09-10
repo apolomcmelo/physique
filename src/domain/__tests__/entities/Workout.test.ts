@@ -21,6 +21,7 @@ describe('createWorkout', () => {
             sets: null,
             repsPerSet: null,
             weightKg: null,
+            durationSeconds: null,
             notes: 'Max effort for 30s',
         });
         const workout = createWorkout({
@@ -41,6 +42,7 @@ describe('createWorkout', () => {
             sets: 4,
             repsPerSet: 8,
             weightKg: 80,
+            durationSeconds: null,
             notes: null,
         });
         const workout = createWorkout({
@@ -68,6 +70,7 @@ describe('createExercise', () => {
             sets: 3,
             repsPerSet: 10,
             weightKg: 60,
+            durationSeconds: null,
             notes: 'Keep elbows at 45°',
         });
         expect(exercise.name).toBe('Bench Press');
@@ -84,16 +87,18 @@ describe('createExercise', () => {
             sets: null,
             repsPerSet: null,
             weightKg: null,
+            durationSeconds: 30,
             notes: null,
         });
         expect(exercise.sets).toBeNull();
         expect(exercise.repsPerSet).toBeNull();
         expect(exercise.weightKg).toBeNull();
+        expect(exercise.durationSeconds).toBe(30);
     });
 
     it('throws if name is empty', () => {
         expect(() =>
-            createExercise({ name: '', sets: 3, repsPerSet: 10, weightKg: null, notes: null }),
+            createExercise({ name: '', sets: 3, repsPerSet: 10, weightKg: null, durationSeconds: null, notes: null }),
         ).toThrow('Exercise name is required');
     });
 });

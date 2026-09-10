@@ -38,6 +38,9 @@ export default function ActiveWorkoutScreen() {
     // Rest timer
     const [resting, setResting] = useState(false);
 
+    // Working-set timer (time-based exercises)
+    const [setTimerRunning, setSetTimerRunning] = useState(false);
+
     useEffect(() => {
         if (!id) {
             setError('Treino não encontrado');
@@ -68,6 +71,7 @@ export default function ActiveWorkoutScreen() {
     const currentExercise: Exercise | null = workout?.exercises[exerciseIndex] ?? null;
     const totalSets = currentExercise?.sets ?? 1;
     const currentSetNumber = setIndex + 1; // 1-based display
+    const setDuration = currentExercise?.durationSeconds ?? null;
 
     const isLastSet = setIndex >= totalSets - 1;
     const isLastExercise = workout ? exerciseIndex >= workout.exercises.length - 1 : false;
@@ -84,6 +88,7 @@ export default function ActiveWorkoutScreen() {
                 currentExercise.weightKg,
             );
             setSession(updated);
+            setSetTimerRunning(false);
             setResting(true);
         } catch {
             setError('Erro ao registrar série');
@@ -101,6 +106,7 @@ export default function ActiveWorkoutScreen() {
         } else {
             setSetIndex((prev) => prev + 1);
         }
+        setSetTimerRunning(false);
     }
 
     async function handleFinishWorkout() {
@@ -197,6 +203,18 @@ export default function ActiveWorkoutScreen() {
                                     </TypographyText>
                                 </View>
                             )}
+                            {setDuration && (
+                                <View style={styles.statBox}>
+                                    <TypographyText variant="label" color={Colors.textDisabled}>
+                                        DURAÇÃO
+                                    </TypographyText>
+                                    <TypographyText variant="h2" color={Colors.textPrimary}>
+                                        {setDuration >= 60
+                                            ? `${Math.floor(setDuration / 60)}:${String(setDuration % 60).padStart(2, '0')}min`
+                                            : `${setDuration}s`}
+                                    </TypographyText>
+                                </View>
+                            )}
                             {currentExercise.weightKg && (
                                 <View style={styles.statBox}>
                                     <TypographyText variant="label" color={Colors.textDisabled}>
@@ -209,6 +227,21 @@ export default function ActiveWorkoutScreen() {
                             )}
                         </View>
                     </>
+                )}
+
+                {/* Working-set timer (time-based exercises) */}
+                {!resting && setTimerRunning && setDuration && currentExercise && (
+                    <View style={styles.timerContainer}>
+                        <TypographyText variant="label" color={Colors.textSecondary} style={{ marginBottom: Spacing.sm }}>
+                            SÉRIE EM ANDAMENTO
+                        </TypographyText>
+                        <WorkoutTimer
+                            key={`${currentExercise.id}-${setIndex}`}
+                            durationSeconds={setDuration}
+                            onComplete={handleCompleteSet}
+                            autoStart
+                        />
+                    </View>
                 )}
 
                 {/* Rest Timer */}
@@ -237,7 +270,13 @@ export default function ActiveWorkoutScreen() {
                     </TypographyText>
                 )}
 
-                {!resting && !isWorkoutComplete && (
+                {!resting && !isWorkoutComplete && !setTimerRunning && setDuration && (
+                    <TouchableOpacity style={styles.mainBtn} onPress={() => setSetTimerRunning(true)}>
+                        <Text style={[Typography.h3, { color: Colors.white }]}>▶ Iniciar Série</Text>
+                    </TouchableOpacity>
+                )}
+
+                {!resting && !isWorkoutComplete && (setTimerRunning || !setDuration) && (
                     <TouchableOpacity style={styles.mainBtn} onPress={handleCompleteSet}>
                         <Text style={[Typography.h3, { color: Colors.white }]}>✓ Terminei a Série</Text>
                     </TouchableOpacity>

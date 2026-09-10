@@ -68,17 +68,40 @@ function parseWeight(text: string): number | null {
     return parseFloat(weights[weights.length - 1][1].replace(',', '.'));
 }
 
-function parsePrescription(countText: string, unit: string | undefined): { reps: number | null; duration: string | null } {
+function parsePrescription(
+    countText: string,
+    unit: string | undefined,
+): { reps: number | null; durationSeconds: number | null; durationLabel: string | null } {
     const aRange = countText.match(/^(\d+)\s*a\s*([\d:]+)$/);
     if (aRange) {
-        return { reps: null, duration: `${aRange[1]} a ${aRange[2]}${unit ?? ''}` };
+        return {
+            reps: null,
+            durationSeconds: parseDurationSeconds(aRange[1], unit),
+            durationLabel: `${aRange[1]} a ${aRange[2]}${unit ?? ''}`,
+        };
     }
     if (unit === 's' || unit === 'min') {
-        return { reps: null, duration: `${countText}${unit}` };
+        return {
+            reps: null,
+            durationSeconds: parseDurationSeconds(countText, unit),
+            durationLabel: `${countText}${unit}`,
+        };
     }
     // "10-12" is a rep range — keep the lower bound as the target
     const lower = countText.split('-')[0];
-    return { reps: parseInt(lower, 10), duration: null };
+    return { reps: parseInt(lower, 10), durationSeconds: null, durationLabel: null };
+}
+
+/** Converts "45" (s), "1:20" (min) etc. to seconds. "min" values use MM:SS when they contain a colon. */
+function parseDurationSeconds(value: string, unit: string | undefined): number | null {
+    if (value.includes(':')) {
+        const [minutes, seconds] = value.split(':').map((p) => parseInt(p, 10));
+        if (Number.isNaN(minutes) || Number.isNaN(seconds)) return null;
+        return minutes * 60 + seconds;
+    }
+    const amount = parseInt(value, 10);
+    if (Number.isNaN(amount)) return null;
+    return unit === 'min' ? amount * 60 : amount;
 }
 
 function parseExerciseSegment(segment: string, sharedSets: number | null): Exercise | null {
@@ -96,8 +119,8 @@ function parseExerciseSegment(segment: string, sharedSets: number | null): Exerc
     const name = (weightMatch ? weightMatch[1] : rest).trim();
     if (!name) return null;
 
-    const { reps, duration } = parsePrescription(countText, unit);
-    const noteParts = [duration];
+    const { reps, durationSeconds, durationLabel } = parsePrescription(countText, unit);
+    const noteParts = [durationLabel];
     if (weightMatch) {
         const annotation = weightMatch[2].replace(/[\d.,]+\s*kg/gi, '').trim();
         if (annotation) noteParts.push(`(${annotation})`);
@@ -108,6 +131,7 @@ function parseExerciseSegment(segment: string, sharedSets: number | null): Exerc
         sets: setsText ? parseInt(setsText, 10) : sharedSets,
         repsPerSet: reps,
         weightKg: weightMatch ? parseWeight(weightMatch[2]) : null,
+        durationSeconds,
         notes: noteParts.filter(Boolean).join(' ') || null,
     });
 }
@@ -140,6 +164,7 @@ export function parseExercises(description: string): Exercise[] {
                 sets: null,
                 repsPerSet: null,
                 weightKg: null,
+                durationSeconds: null,
                 notes: trimmed,
             }),
         ];

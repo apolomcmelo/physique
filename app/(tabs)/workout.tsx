@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     ScrollView,
     StyleSheet,
     Text,
@@ -32,6 +33,7 @@ export default function WorkoutScreen() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
+    const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
 
     // Add form state
     const [name, setName] = useState('');
@@ -63,6 +65,66 @@ export default function WorkoutScreen() {
         setExercises((prev) => [...prev, { name: '', sets: '', reps: '', weight: '' }]);
     }
 
+    function formatDateTimeInput(date: Date): string {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function resetForm() {
+        setEditingWorkout(null);
+        setName('');
+        setType('Calisthenics');
+        setScheduledAt('');
+        setExercises([{ name: '', sets: '', reps: '', weight: '' }]);
+        setFormError(null);
+    }
+
+    function openNewForm() {
+        resetForm();
+        setShowForm(true);
+    }
+
+    function openEditForm(workout: Workout) {
+        setEditingWorkout(workout);
+        setName(workout.name);
+        setType(workout.type);
+        setScheduledAt(workout.scheduledAt ? formatDateTimeInput(workout.scheduledAt) : '');
+        setExercises(
+            workout.exercises.length > 0
+                ? workout.exercises.map((e) => ({
+                    name: e.name,
+                    sets: e.sets !== null ? String(e.sets) : '',
+                    reps: e.repsPerSet !== null ? String(e.repsPerSet) : '',
+                    weight: e.weightKg !== null ? String(e.weightKg) : '',
+                }))
+                : [{ name: '', sets: '', reps: '', weight: '' }],
+        );
+        setFormError(null);
+        setShowForm(true);
+    }
+
+    function handleDelete(workout: Workout) {
+        Alert.alert(
+            'Excluir treino',
+            `Excluir "${workout.name}"? Esta ação não pode ser desfeita.`,
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Excluir',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await workoutRepo.deleteWorkout(workout.id);
+                            await loadWorkouts();
+                        } catch {
+                            setError('Erro ao excluir treino');
+                        }
+                    },
+                },
+            ],
+        );
+    }
+
     function removeExerciseRow(index: number) {
         setExercises((prev) => prev.filter((_, i) => i !== index));
     }
@@ -87,6 +149,7 @@ export default function WorkoutScreen() {
                     sets: ex.sets ? parseInt(ex.sets, 10) : null,
                     repsPerSet: ex.reps ? parseInt(ex.reps, 10) : null,
                     weightKg: ex.weight ? parseFloat(ex.weight) : null,
+                    durationSeconds: null,
                     notes: null,
                 }),
             );
@@ -94,19 +157,26 @@ export default function WorkoutScreen() {
         try {
             setSaving(true);
             setFormError(null);
-            const workout = createWorkout({
-                name: name.trim(),
-                type,
-                exercises: builtExercises,
-                scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-            });
-            await workoutRepo.saveWorkout(workout);
+            if (editingWorkout) {
+                await workoutRepo.updateWorkout({
+                    ...editingWorkout,
+                    name: name.trim(),
+                    type,
+                    exercises: builtExercises,
+                    scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+                });
+            } else {
+                const workout = createWorkout({
+                    name: name.trim(),
+                    type,
+                    exercises: builtExercises,
+                    scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+                });
+                await workoutRepo.saveWorkout(workout);
+            }
             await loadWorkouts();
             setShowForm(false);
-            setName('');
-            setType('Calisthenics');
-            setScheduledAt('');
-            setExercises([{ name: '', sets: '', reps: '', weight: '' }]);
+            resetForm();
         } catch (e) {
             setFormError('Erro ao salvar treino');
         } finally {
@@ -140,7 +210,10 @@ export default function WorkoutScreen() {
                 <TypographyText variant="h2" color={Colors.textPrimary}>
                     Treinos
                 </TypographyText>
-                <TouchableOpacity style={styles.addBtn} onPress={() => setShowForm((v) => !v)}>
+                <TouchableOpacity
+                    style={styles.addBtn}
+                    onPress={() => (showForm ? (setShowForm(false), resetForm()) : openNewForm())}
+                >
                     <TypographyText variant="label" color={Colors.primary}>
                         {showForm ? '✕ Fechar' : '+ Novo'}
                     </TypographyText>
@@ -163,7 +236,7 @@ export default function WorkoutScreen() {
                 {showForm && (
                     <Card style={styles.formCard}>
                         <TypographyText variant="h3" color={Colors.textPrimary}>
-                            Novo Treino
+                            {editingWorkout ? 'Editar Treino' : 'Novo Treino'}
                         </TypographyText>
 
                         <Input
@@ -265,7 +338,7 @@ export default function WorkoutScreen() {
                         )}
 
                         <Button
-                            label="Salvar Treino"
+                            label={editingWorkout ? 'Salvar Alterações' : 'Salvar Treino'}
                             onPress={handleSave}
                             loading={saving}
                             style={{ marginTop: Spacing.md }}
@@ -279,7 +352,7 @@ export default function WorkoutScreen() {
                         icon="🏋️"
                         title="Sem treinos"
                         message="Adicione seu primeiro treino para começar."
-                        action={{ label: '+ Novo Treino', onPress: () => setShowForm(true) }}
+                        action={{ label: '+ Novo Treino', onPress: openNewForm }}
                     />
                 ) : (
                     workouts.map((workout) => (
@@ -309,6 +382,24 @@ export default function WorkoutScreen() {
                             <TypographyText variant="bodySmall" color={Colors.textDisabled}>
                                 {workout.exercises.length} exercícios
                             </TypographyText>
+                            <View style={styles.cardActions}>
+                                <TouchableOpacity
+                                    style={styles.actionBtn}
+                                    onPress={() => openEditForm(workout)}
+                                >
+                                    <TypographyText variant="label" color={Colors.primary}>
+                                        Editar
+                                    </TypographyText>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.actionBtn, styles.deleteBtn]}
+                                    onPress={() => handleDelete(workout)}
+                                >
+                                    <TypographyText variant="label" color={Colors.error}>
+                                        Excluir
+                                    </TypographyText>
+                                </TouchableOpacity>
+                            </View>
                         </Card>
                     ))
                 )}
@@ -387,5 +478,20 @@ const styles = StyleSheet.create({
         paddingVertical: 2,
         borderRadius: Radius.full,
         borderWidth: 1,
+    },
+    cardActions: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+        marginTop: Spacing.xs,
+    },
+    actionBtn: {
+        paddingVertical: 4,
+        paddingHorizontal: Spacing.sm,
+        borderWidth: 1,
+        borderColor: Colors.primary,
+        borderRadius: 6,
+    },
+    deleteBtn: {
+        borderColor: Colors.error,
     },
 });

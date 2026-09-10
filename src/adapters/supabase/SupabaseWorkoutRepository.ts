@@ -23,6 +23,7 @@ interface ExerciseRow {
     sets: number | null;
     reps_per_set: number | null;
     weight_kg: number | null;
+    duration_seconds: number | null;
     notes: string | null;
     created_at: string;
 }
@@ -55,6 +56,7 @@ function rowToExercise(row: ExerciseRow): Exercise {
         sets: row.sets,
         repsPerSet: row.reps_per_set,
         weightKg: row.weight_kg,
+        durationSeconds: row.duration_seconds ?? null,
         notes: row.notes,
     };
 }
@@ -146,6 +148,7 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
                 sets: e.sets,
                 reps_per_set: e.repsPerSet,
                 weight_kg: e.weightKg,
+                duration_seconds: e.durationSeconds,
                 notes: e.notes,
                 created_at: new Date().toISOString(),
             }));
@@ -194,6 +197,7 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
                 sets: e.sets,
                 reps_per_set: e.repsPerSet,
                 weight_kg: e.weightKg,
+                duration_seconds: e.durationSeconds,
                 notes: e.notes,
                 created_at: new Date().toISOString(),
             }));

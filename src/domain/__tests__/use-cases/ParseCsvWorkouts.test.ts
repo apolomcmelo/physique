@@ -129,10 +129,11 @@ describe('parseCsvWorkouts', () => {
             sets: 3,
             repsPerSet: 10,
             weightKg: 7,
+            durationSeconds: null,
         });
     });
 
-    it('parses time-based sets (e.g. "4x 45s") into notes', () => {
+    it('parses time-based sets (e.g. "4x 45s") into durationSeconds', () => {
         const csv = `${HEADER}\nTerça-feira;18:30;Musculação;4x 45s Wall sit (4.5kg);Pernas`;
         const [workout] = parseCsvWorkouts(csv);
         expect(workout.exercises).toHaveLength(1);
@@ -141,6 +142,7 @@ describe('parseCsvWorkouts', () => {
             sets: 4,
             repsPerSet: null,
             weightKg: 4.5,
+            durationSeconds: 45,
             notes: '45s',
         });
     });
@@ -154,6 +156,7 @@ describe('parseCsvWorkouts', () => {
             sets: 3,
             repsPerSet: null,
             weightKg: null,
+            durationSeconds: 45,
             notes: '45s',
         });
         expect(workout.exercises[1]).toMatchObject({
@@ -161,6 +164,7 @@ describe('parseCsvWorkouts', () => {
             sets: 3,
             repsPerSet: null,
             weightKg: 1.5,
+            durationSeconds: 35,
             notes: '35s (2 anilhas de)',
         });
         expect(workout.exercises[2]).toMatchObject({
@@ -256,6 +260,7 @@ describe('parseCsvWorkouts', () => {
             name: 'Prancha',
             sets: 3,
             repsPerSet: null,
+            durationSeconds: 60,
             notes: '1 a 1:20min',
         });
 
