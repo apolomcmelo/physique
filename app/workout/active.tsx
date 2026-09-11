@@ -19,7 +19,10 @@ import { WorkoutTimer } from '../../src/ui/components/WorkoutTimer';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Radius, Spacing, Typography } from '../../src/ui/theme';
 
-const REST_DURATION = 90;
+const DEFAULT_REST_DURATION = 90;
+const REST_DURATION_STEP = 15;
+const MIN_REST_DURATION = 15;
+const MAX_REST_DURATION = 300;
 
 export default function ActiveWorkoutScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,6 +40,7 @@ export default function ActiveWorkoutScreen() {
 
     // Rest timer
     const [resting, setResting] = useState(false);
+    const [restDuration, setRestDuration] = useState(DEFAULT_REST_DURATION);
 
     // Working-set timer (time-based exercises)
     const [setTimerRunning, setSetTimerRunning] = useState(false);
@@ -76,6 +80,12 @@ export default function ActiveWorkoutScreen() {
     const isLastSet = setIndex >= totalSets - 1;
     const isLastExercise = workout ? exerciseIndex >= workout.exercises.length - 1 : false;
     const isWorkoutComplete = isLastExercise && isLastSet;
+
+    function adjustRestDuration(change: number) {
+        setRestDuration((currentDuration) =>
+            Math.min(MAX_REST_DURATION, Math.max(MIN_REST_DURATION, currentDuration + change)),
+        );
+    }
 
     async function handleCompleteSet() {
         if (!session || !currentExercise) return;
@@ -226,6 +236,36 @@ export default function ActiveWorkoutScreen() {
                                 </View>
                             )}
                         </View>
+
+                        {!resting && !setTimerRunning && !isWorkoutComplete && (
+                            <View style={styles.restControls}>
+                                <TouchableOpacity
+                                    accessibilityLabel="Diminuir descanso em 15 segundos"
+                                    disabled={restDuration <= MIN_REST_DURATION}
+                                    onPress={() => adjustRestDuration(-REST_DURATION_STEP)}
+                                    style={[
+                                        styles.restAdjustBtn,
+                                        restDuration <= MIN_REST_DURATION && styles.restAdjustBtnDisabled,
+                                    ]}
+                                >
+                                    <Text style={[Typography.h3, { color: Colors.textPrimary }]}>-</Text>
+                                </TouchableOpacity>
+                                <TypographyText variant="body" color={Colors.textSecondary} style={styles.restDurationText}>
+                                    Descanso {restDuration}s
+                                </TypographyText>
+                                <TouchableOpacity
+                                    accessibilityLabel="Aumentar descanso em 15 segundos"
+                                    disabled={restDuration >= MAX_REST_DURATION}
+                                    onPress={() => adjustRestDuration(REST_DURATION_STEP)}
+                                    style={[
+                                        styles.restAdjustBtn,
+                                        restDuration >= MAX_REST_DURATION && styles.restAdjustBtnDisabled,
+                                    ]}
+                                >
+                                    <Text style={[Typography.h3, { color: Colors.textPrimary }]}>+</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </>
                 )}
 
@@ -251,7 +291,7 @@ export default function ActiveWorkoutScreen() {
                             DESCANSO
                         </TypographyText>
                         <WorkoutTimer
-                            durationSeconds={REST_DURATION}
+                            durationSeconds={restDuration}
                             onComplete={handleRestComplete}
                             autoStart
                         />
@@ -361,6 +401,27 @@ const styles = StyleSheet.create({
     timerContainer: {
         alignItems: 'center',
         marginTop: Spacing.xl,
+    },
+    restControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: Spacing.md,
+    },
+    restAdjustBtn: {
+        width: 44,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: Radius.sm,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    restAdjustBtnDisabled: {
+        opacity: 0.4,
+    },
+    restDurationText: {
+        minWidth: 72,
+        textAlign: 'center',
     },
     skipBtn: {
         marginTop: Spacing.md,
