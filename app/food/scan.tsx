@@ -2,7 +2,6 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useRef, useState } from 'react';
 import {
-    Alert,
     Platform,
     ScrollView,
     StyleSheet,
@@ -18,6 +17,7 @@ import { Input } from '../../src/ui/components/Input';
 import { MacroRow } from '../../src/ui/components/MacroRow';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Spacing } from '../../src/ui/theme';
+import { alertAsync } from '../../src/ui/utils/dialogs';
 import { shouldOpenInAppCamera } from './capture';
 import { FOOD_SCAN_RECOGNIZED_TEXT_LABEL, getFoodScanPrimaryActionLabel } from './copy';
 
@@ -52,7 +52,7 @@ export default function FoodScanScreen() {
             if (nutritionData.servingSizeGrams) setServingSize(String(nutritionData.servingSizeGrams));
             if (nutritionData.ingredients) setIngredients(nutritionData.ingredients);
         } catch {
-            Alert.alert('Erro', 'Não foi possível ler o rótulo. Preencha manualmente.');
+            await alertAsync('Erro', 'Não foi possível ler o rótulo. Preencha manualmente.');
         } finally {
             setLoading(false);
         }
@@ -73,7 +73,7 @@ export default function FoodScanScreen() {
             if (!cameraPermission?.granted) {
                 const permissionResult = await requestCameraPermission();
                 if (!permissionResult.granted) {
-                    Alert.alert('Permissão necessária', 'Permita o acesso à câmera para importar o rótulo.');
+                    await alertAsync('Permissão necessária', 'Permita o acesso à câmera para importar o rótulo.');
                     return;
                 }
             }
@@ -89,20 +89,20 @@ export default function FoodScanScreen() {
         try {
             const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
             if (!photo?.uri) {
-                Alert.alert('Erro', 'Não foi possível capturar a imagem.');
+                await alertAsync('Erro', 'Não foi possível capturar a imagem.');
                 return;
             }
 
             setCameraOpen(false);
             await processImageUri(photo.uri);
         } catch {
-            Alert.alert('Erro', 'Não foi possível capturar a imagem.');
+            await alertAsync('Erro', 'Não foi possível capturar a imagem.');
         }
     }
 
     async function saveFood() {
         if (!name.trim()) {
-            Alert.alert('Erro', 'Informe o nome do alimento.');
+            await alertAsync('Erro', 'Informe o nome do alimento.');
             return;
         }
         setLoading(true);
@@ -120,9 +120,9 @@ export default function FoodScanScreen() {
             });
             await foodRepo.saveFoodItem(item);
             setSaved(true);
-            Alert.alert('Salvo', `${item.name} salvo com sucesso!`);
+            await alertAsync('Salvo', `${item.name} salvo com sucesso!`);
         } catch (e) {
-            Alert.alert('Erro', 'Não foi possível salvar o alimento.');
+            await alertAsync('Erro', 'Não foi possível salvar o alimento.');
         } finally {
             setLoading(false);
         }

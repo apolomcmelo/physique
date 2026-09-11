@@ -82,6 +82,8 @@ export default function HistoryScreen() {
             setBodyFatInput('');
             setProteinInput('');
             setShowWeightForm(false);
+        } catch {
+            setError('Erro ao registrar peso');
         } finally {
             setSavingWeight(false);
         }

@@ -1,9 +1,9 @@
 import * as DocumentPicker from 'expo-document-picker';
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Clipboard,
     Modal,
     ScrollView,
     StyleSheet,
@@ -269,7 +269,7 @@ export default function SettingsScreen() {
     }
 
     function handleCopyPrompt() {
-        Clipboard.setString(promptText);
+        Clipboard.setStringAsync(promptText);
     }
 
     if (loading) {

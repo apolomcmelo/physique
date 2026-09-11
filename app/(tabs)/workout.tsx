@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     ScrollView,
     StyleSheet,
     Text,
@@ -18,6 +17,7 @@ import { EmptyState } from '../../src/ui/components/EmptyState';
 import { Input } from '../../src/ui/components/Input';
 import { Typography as TypographyText } from '../../src/ui/components/Typography';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
+import { confirmAsync } from '../../src/ui/utils/dialogs';
 import { Colors, Radius, Spacing, Typography } from '../../src/ui/theme';
 
 interface ExerciseForm {
@@ -113,26 +113,19 @@ export default function WorkoutScreen() {
         setShowForm(true);
     }
 
-    function handleDelete(workout: Workout) {
-        Alert.alert(
+    async function handleDelete(workout: Workout) {
+        const confirmed = await confirmAsync(
             'Excluir treino',
             `Excluir "${workout.name}"? Esta ação não pode ser desfeita.`,
-            [
-                { text: 'Cancelar', style: 'cancel' },
-                {
-                    text: 'Excluir',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await workoutRepo.deleteWorkout(workout.id);
-                            await loadWorkouts();
-                        } catch {
-                            setError('Erro ao excluir treino');
-                        }
-                    },
-                },
-            ],
         );
+        if (!confirmed) return;
+
+        try {
+            await workoutRepo.deleteWorkout(workout.id);
+            await loadWorkouts();
+        } catch {
+            setError('Erro ao excluir treino');
+        }
     }
 
     function removeExerciseRow(index: number) {
