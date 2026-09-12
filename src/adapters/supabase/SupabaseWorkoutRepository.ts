@@ -20,10 +20,13 @@ interface ExerciseRow {
     id: string;
     workout_id: string;
     name: string;
+    order_index?: number | null;
     sets: number | null;
     reps_per_set: number | null;
     weight_kg: number | null;
     duration_seconds: number | null;
+    rest_seconds_between_sets?: number | null;
+    rest_seconds_before_next_exercise?: number | null;
     notes: string | null;
     created_at: string;
 }
@@ -53,10 +56,13 @@ function rowToExercise(row: ExerciseRow): Exercise {
     return {
         id: row.id,
         name: row.name,
+        orderIndex: row.order_index ?? 0,
         sets: row.sets,
         repsPerSet: row.reps_per_set,
         weightKg: row.weight_kg,
         durationSeconds: row.duration_seconds ?? null,
+        restSecondsBetweenSets: row.rest_seconds_between_sets ?? null,
+        restSecondsBeforeNextExercise: row.rest_seconds_before_next_exercise ?? null,
         notes: row.notes,
     };
 }
@@ -66,7 +72,7 @@ function rowToWorkout(row: WorkoutRow): Workout {
         id: row.id,
         name: row.name,
         type: row.type,
-        exercises: (row.exercises ?? []).map(rowToExercise),
+        exercises: (row.exercises ?? []).map(rowToExercise).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0)),
         scheduledAt: row.scheduled_at ? new Date(row.scheduled_at) : null,
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
@@ -141,14 +147,17 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
         }
 
         if (workout.exercises.length > 0) {
-            const exerciseRows = workout.exercises.map((e) => ({
+            const exerciseRows = workout.exercises.map((e, index) => ({
                 id: e.id,
                 workout_id: workout.id,
                 name: e.name,
+                order_index: e.orderIndex ?? index,
                 sets: e.sets,
                 reps_per_set: e.repsPerSet,
                 weight_kg: e.weightKg,
                 duration_seconds: e.durationSeconds,
+                rest_seconds_between_sets: e.restSecondsBetweenSets ?? null,
+                rest_seconds_before_next_exercise: e.restSecondsBeforeNextExercise ?? null,
                 notes: e.notes,
                 created_at: new Date().toISOString(),
             }));
@@ -190,14 +199,17 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
         }
 
         if (workout.exercises.length > 0) {
-            const exerciseRows = workout.exercises.map((e) => ({
+            const exerciseRows = workout.exercises.map((e, index) => ({
                 id: e.id,
                 workout_id: workout.id,
                 name: e.name,
+                order_index: e.orderIndex ?? index,
                 sets: e.sets,
                 reps_per_set: e.repsPerSet,
                 weight_kg: e.weightKg,
                 duration_seconds: e.durationSeconds,
+                rest_seconds_between_sets: e.restSecondsBetweenSets ?? null,
+                rest_seconds_before_next_exercise: e.restSecondsBeforeNextExercise ?? null,
                 notes: e.notes,
                 created_at: new Date().toISOString(),
             }));

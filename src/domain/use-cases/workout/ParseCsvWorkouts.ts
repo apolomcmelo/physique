@@ -104,6 +104,33 @@ function parseDurationSeconds(value: string, unit: string | undefined): number |
     return unit === 'min' ? amount * 60 : amount;
 }
 
+function parseRestIntervals(text: string): { restSecondsBetweenSets: number | null; restSecondsBeforeNextExercise: number | null } {
+    const normalized = text.toLowerCase();
+    const restMatch = normalized.match(/(?:rest|descanso|pausa)\s*:?\s*(\d+)\s*(?:s|seg|segundos?)?(?:\s*(?:\/|,|\|)\s*(\d+)\s*(?:s|seg|segundos?)?\s*(?:transi[cç][aã]o|transicao|pr[óo]ximo|proximo)?)?/i);
+
+    if (restMatch) {
+        const between = parseInt(restMatch[1], 10);
+        const transition = restMatch[2] ? parseInt(restMatch[2], 10) : null;
+        return {
+            restSecondsBetweenSets: between,
+            restSecondsBeforeNextExercise: transition,
+        };
+    }
+
+    const transitionOnlyMatch = normalized.match(/(?:transi[cç][aã]o|transicao|pr[óo]ximo|proximo)\s*(?:.*?)(\d+)\s*(?:s|seg|segundos?)/i);
+    if (transitionOnlyMatch) {
+        return {
+            restSecondsBetweenSets: null,
+            restSecondsBeforeNextExercise: parseInt(transitionOnlyMatch[1], 10),
+        };
+    }
+
+    return {
+        restSecondsBetweenSets: null,
+        restSecondsBeforeNextExercise: null,
+    };
+}
+
 function parseExerciseSegment(segment: string, sharedSets: number | null): Exercise | null {
     const trimmed = segment.trim();
     if (!trimmed) return null;
@@ -116,10 +143,12 @@ function parseExerciseSegment(segment: string, sharedSets: number | null): Exerc
     if (!rest) return null;
 
     const weightMatch = rest.match(WEIGHT_SUFFIX_REGEX);
-    const name = (weightMatch ? weightMatch[1] : rest).trim();
+    const baseText = (weightMatch ? weightMatch[1] : rest).trim();
+    const name = baseText.replace(/\s*\(.*?\)$/, '').trim();
     if (!name) return null;
 
     const { reps, durationSeconds, durationLabel } = parsePrescription(countText, unit);
+    const restIntervals = parseRestIntervals(weightMatch ? weightMatch[2] : rest);
     const noteParts = [durationLabel];
     if (weightMatch) {
         const annotation = weightMatch[2].replace(/[\d.,]+\s*kg/gi, '').trim();
@@ -128,12 +157,57 @@ function parseExerciseSegment(segment: string, sharedSets: number | null): Exerc
 
     return createExercise({
         name,
+        orderIndex: 0,
         sets: setsText ? parseInt(setsText, 10) : sharedSets,
         repsPerSet: reps,
         weightKg: weightMatch ? parseWeight(weightMatch[2]) : null,
         durationSeconds,
+        restSecondsBetweenSets: restIntervals.restSecondsBetweenSets,
+        restSecondsBeforeNextExercise: restIntervals.restSecondsBeforeNextExercise,
         notes: noteParts.filter(Boolean).join(' ') || null,
     });
+}
+
+function parseRestOnlySegment(segment: string): number | null {
+    const trimmed = segment.trim();
+    if (!trimmed) return null;
+
+    const match = trimmed.match(/^\s*(\d+)\s*(?:s|seg|segundos?)\s*(?:rest|descanso|pausa|transi[cç][aã]o|transicao)?\s*$/i);
+    return match ? parseInt(match[1], 10) : null;
+}
+
+function splitAlternatives(segment: string): string[] {
+    const parts: string[] = [];
+    let current = '';
+    let parenDepth = 0;
+
+    for (const char of segment) {
+        if (char === '(') {
+            parenDepth += 1;
+            current += char;
+            continue;
+        }
+
+        if (char === ')') {
+            parenDepth = Math.max(0, parenDepth - 1);
+            current += char;
+            continue;
+        }
+
+        if (char === '/' && parenDepth === 0) {
+            parts.push(current.trim());
+            current = '';
+            continue;
+        }
+
+        current += char;
+    }
+
+    if (current.trim()) {
+        parts.push(current.trim());
+    }
+
+    return parts;
 }
 
 export function parseExercises(description: string): Exercise[] {
@@ -144,32 +218,57 @@ export function parseExercises(description: string): Exercise[] {
     const body = sharedMatch ? sharedMatch[2] : trimmed;
     const sharedSets = sharedMatch ? parseInt(sharedMatch[1], 10) : null;
 
-    const exercises = body
-        .split('+')
-        .map((segment) => {
-            const [primary, ...alternatives] = segment.split('/');
-            const exercise = parseExerciseSegment(primary, sharedSets);
-            if (exercise && alternatives.length > 0) {
-                const alt = alternatives.join('/').trim();
-                exercise.notes = exercise.notes ? `${exercise.notes} ou ${alt}` : `ou ${alt}`;
-            }
-            return exercise;
-        })
-        .filter((e): e is Exercise => e !== null);
+    const exercises: Exercise[] = [];
+    let trailingRestSeconds: number | null = null;
 
-    if (exercises.length === 0) {
+    for (const segment of body.split('+')) {
+        const restOnlyValue = parseRestOnlySegment(segment);
+        if (restOnlyValue !== null) {
+            trailingRestSeconds = restOnlyValue;
+            continue;
+        }
+
+        const alternatives = splitAlternatives(segment);
+        const [primary, ...others] = alternatives;
+        const exercise = parseExerciseSegment(primary, sharedSets);
+        if (!exercise) continue;
+
+        if (others.length > 0) {
+            const alt = others.join('/').trim();
+            exercise.notes = exercise.notes ? `${exercise.notes} ou ${alt}` : `ou ${alt}`;
+        }
+
+        if (trailingRestSeconds !== null) {
+            exercise.restSecondsBeforeNextExercise = trailingRestSeconds;
+            trailingRestSeconds = null;
+        }
+
+        exercises.push(exercise);
+    }
+
+    const orderedExercises = exercises.map((exercise, index) => ({ ...exercise, orderIndex: index }));
+
+    if (orderedExercises.length === 0) {
         return [
             createExercise({
                 name: trimmed,
+                orderIndex: 0,
                 sets: null,
                 repsPerSet: null,
                 weightKg: null,
                 durationSeconds: null,
+                restSecondsBetweenSets: null,
+                restSecondsBeforeNextExercise: null,
                 notes: trimmed,
             }),
         ];
     }
-    return exercises;
+
+    if (trailingRestSeconds !== null && orderedExercises.length > 0) {
+        orderedExercises[orderedExercises.length - 1].restSecondsBeforeNextExercise = trailingRestSeconds;
+    }
+
+    return orderedExercises;
 }
 
 /**

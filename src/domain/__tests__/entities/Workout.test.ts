@@ -67,16 +67,22 @@ describe('createExercise', () => {
     it('creates valid exercise with all fields', () => {
         const exercise = createExercise({
             name: 'Bench Press',
+            orderIndex: 0,
             sets: 3,
             repsPerSet: 10,
             weightKg: 60,
             durationSeconds: null,
+            restSecondsBetweenSets: 90,
+            restSecondsBeforeNextExercise: 120,
             notes: 'Keep elbows at 45°',
         });
         expect(exercise.name).toBe('Bench Press');
+        expect(exercise.orderIndex).toBe(0);
         expect(exercise.sets).toBe(3);
         expect(exercise.repsPerSet).toBe(10);
         expect(exercise.weightKg).toBe(60);
+        expect(exercise.restSecondsBetweenSets).toBe(90);
+        expect(exercise.restSecondsBeforeNextExercise).toBe(120);
         expect(exercise.notes).toBe('Keep elbows at 45°');
         expect(exercise.id).toBeDefined();
     });

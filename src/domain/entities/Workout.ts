@@ -3,11 +3,14 @@ import { generateId } from '../value-objects/UUID';
 export interface Exercise {
     id: string;
     name: string;
+    orderIndex?: number;
     sets: number | null;
     repsPerSet: number | null;
     weightKg: number | null;
     /** Duration of one set in seconds, for time-based sets (e.g. 45s plank). */
     durationSeconds: number | null;
+    restSecondsBetweenSets?: number | null;
+    restSecondsBeforeNextExercise?: number | null;
     notes: string | null;
 }
 
@@ -30,9 +33,13 @@ export function createExercise(params: CreateExerciseParams): Exercise {
     if (!params.name || params.name.trim().length === 0) {
         throw new Error('Exercise name is required');
     }
+
     return {
         ...params,
         id: generateId(),
+        orderIndex: params.orderIndex ?? 0,
+        restSecondsBetweenSets: params.restSecondsBetweenSets ?? null,
+        restSecondsBeforeNextExercise: params.restSecondsBeforeNextExercise ?? null,
     };
 }
 

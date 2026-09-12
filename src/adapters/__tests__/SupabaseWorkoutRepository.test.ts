@@ -61,13 +61,38 @@ describe('SupabaseWorkoutRepository', () => {
         });
 
         it('returns a mapped Workout when a row exists', async () => {
-            buildChain({ data: baseRow, error: null });
+            buildChain({
+                data: {
+                    ...baseRow,
+                    exercises: [{
+                        id: 'ex1',
+                        workout_id: 'w1',
+                        name: 'Bench Press',
+                        sets: 4,
+                        reps_per_set: 8,
+                        weight_kg: 60,
+                        duration_seconds: null,
+                        notes: 'Keep elbows in',
+                        order_index: 0,
+                        rest_seconds_between_sets: 90,
+                        rest_seconds_before_next_exercise: 120,
+                        created_at: '2024-01-01T00:00:00.000Z',
+                    }],
+                },
+                error: null,
+            });
             const workout = await repo.getWorkoutById('w1');
             expect(workout).not.toBeNull();
             expect(workout!.id).toBe('w1');
             expect(workout!.name).toBe('Pull Day');
             expect(workout!.type).toBe('Weightlifting');
-            expect(workout!.exercises).toEqual([]);
+            expect(workout!.exercises).toHaveLength(1);
+            expect(workout!.exercises[0]).toMatchObject({
+                name: 'Bench Press',
+                orderIndex: 0,
+                restSecondsBetweenSets: 90,
+                restSecondsBeforeNextExercise: 120,
+            });
             expect(workout!.scheduledAt).toBeNull();
         });
 

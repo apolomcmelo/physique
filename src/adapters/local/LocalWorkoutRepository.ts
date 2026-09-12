@@ -9,6 +9,14 @@ const SESSIONS_KEY = '@physique/workout_sessions';
 function parseWorkout(raw: Workout): Workout {
     return {
         ...raw,
+        exercises: [...(raw.exercises ?? [])]
+            .map((exercise) => ({
+                ...exercise,
+                orderIndex: exercise.orderIndex ?? 0,
+                restSecondsBetweenSets: exercise.restSecondsBetweenSets ?? null,
+                restSecondsBeforeNextExercise: exercise.restSecondsBeforeNextExercise ?? null,
+            }))
+            .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0)),
         scheduledAt: raw.scheduledAt ? new Date(raw.scheduledAt) : null,
         createdAt: new Date(raw.createdAt),
         updatedAt: new Date(raw.updatedAt),

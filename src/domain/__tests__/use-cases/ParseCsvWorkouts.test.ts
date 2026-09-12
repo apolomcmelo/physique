@@ -147,6 +147,25 @@ describe('parseCsvWorkouts', () => {
         });
     });
 
+    it('parses rest intervals and assigns order indexes from exercise sequence', () => {
+        const csv = `${HEADER}\nSegunda-feira;18:30;Musculação;4x 10-12 Flexão declinada (descanso: 15s / 30s transição) + 3x 12-15 Bicep curl (4kg) + 3x 45s Prancha + 15s rest;Peitoral`;
+        const [workout] = parseCsvWorkouts(csv);
+        expect(workout.exercises.map((exercise) => exercise.name)).toEqual([
+            'Flexão declinada',
+            'Bicep curl',
+            'Prancha',
+        ]);
+        expect(workout.exercises.map((exercise) => exercise.orderIndex)).toEqual([0, 1, 2]);
+        expect(workout.exercises[0]).toMatchObject({
+            restSecondsBetweenSets: 15,
+            restSecondsBeforeNextExercise: 30,
+        });
+        expect(workout.exercises[1]).toMatchObject({
+            restSecondsBetweenSets: null,
+            restSecondsBeforeNextExercise: null,
+        });
+    });
+
     it('parses "N séries:" prefix as a set count applied to all segments', () => {
         const csv = `${HEADER}\nSegunda-feira;07:00;Calistenia;3 séries: 45s prancha + 35s wall sit (2 anilhas de 1.5kg) + 26 shoulder taps;Core`;
         const [workout] = parseCsvWorkouts(csv);
