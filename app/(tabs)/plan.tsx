@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     importBtnDisabled: { opacity: 0.5 },
     errorText: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
     filterRow: { flexGrow: 0, marginBottom: Spacing.sm },
-    filterRowContent: { paddingHorizontal: Spacing.md, gap: Spacing.xs },
+    filterRowContent: { paddingHorizontal: Spacing.md, gap: Spacing.xs, paddingBottom: Spacing.xs },
     filterChip: {
         paddingVertical: Spacing.xs,
         paddingHorizontal: Spacing.sm,
@@ -314,6 +314,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
         marginRight: Spacing.xs,
+        maxWidth: 120,
     },
     filterChipActive: {
         backgroundColor: Colors.primary,
@@ -321,7 +322,13 @@ const styles = StyleSheet.create({
     },
     list: { flex: 1 },
     listContent: { padding: Spacing.md, gap: Spacing.sm },
-    entryCard: { gap: 2 },
-    entryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    entryCard: { gap: 2, overflow: 'hidden' },
+    entryHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        flexWrap: 'wrap',
+    },
     objective: { marginTop: Spacing.xs, fontStyle: 'italic' },
 });

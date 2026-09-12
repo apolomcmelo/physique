@@ -288,43 +288,52 @@ export default function WorkoutScreen() {
                         </TypographyText>
 
                         {exercises.map((ex, i) => (
-                            <View key={i} style={styles.exerciseRow}>
+                            <View key={i} style={styles.exerciseCard}>
+                                <View style={styles.exerciseHeaderRow}>
+                                    <TypographyText variant="label" color={Colors.textSecondary}>
+                                        Exercício {i + 1}
+                                    </TypographyText>
+                                    {exercises.length > 1 && (
+                                        <TouchableOpacity onPress={() => removeExerciseRow(i)} style={styles.removeBtn}>
+                                            <Text style={{ color: Colors.error, fontSize: 18 }}>×</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+
                                 <TextInput
-                                    style={[styles.exInput, { flex: 2 }]}
+                                    style={styles.exInputFull}
                                     placeholder="Nome"
                                     placeholderTextColor={Colors.textDisabled}
                                     value={ex.name}
                                     onChangeText={(v) => updateExercise(i, 'name', v)}
                                 />
-                                <TextInput
-                                    style={styles.exInput}
-                                    placeholder="Séries"
-                                    placeholderTextColor={Colors.textDisabled}
-                                    value={ex.sets}
-                                    onChangeText={(v) => updateExercise(i, 'sets', v)}
-                                    keyboardType="number-pad"
-                                />
-                                <TextInput
-                                    style={styles.exInput}
-                                    placeholder="Reps"
-                                    placeholderTextColor={Colors.textDisabled}
-                                    value={ex.reps}
-                                    onChangeText={(v) => updateExercise(i, 'reps', v)}
-                                    keyboardType="number-pad"
-                                />
-                                <TextInput
-                                    style={styles.exInput}
-                                    placeholder="Kg"
-                                    placeholderTextColor={Colors.textDisabled}
-                                    value={ex.weight}
-                                    onChangeText={(v) => updateExercise(i, 'weight', v)}
-                                    keyboardType="decimal-pad"
-                                />
-                                {exercises.length > 1 && (
-                                    <TouchableOpacity onPress={() => removeExerciseRow(i)} style={styles.removeBtn}>
-                                        <Text style={{ color: Colors.error, fontSize: 18 }}>×</Text>
-                                    </TouchableOpacity>
-                                )}
+
+                                <View style={styles.exerciseFieldGrid}>
+                                    <TextInput
+                                        style={styles.exInputGrid}
+                                        placeholder="Séries"
+                                        placeholderTextColor={Colors.textDisabled}
+                                        value={ex.sets}
+                                        onChangeText={(v) => updateExercise(i, 'sets', v)}
+                                        keyboardType="number-pad"
+                                    />
+                                    <TextInput
+                                        style={styles.exInputGrid}
+                                        placeholder="Reps"
+                                        placeholderTextColor={Colors.textDisabled}
+                                        value={ex.reps}
+                                        onChangeText={(v) => updateExercise(i, 'reps', v)}
+                                        keyboardType="number-pad"
+                                    />
+                                    <TextInput
+                                        style={styles.exInputGrid}
+                                        placeholder="Kg"
+                                        placeholderTextColor={Colors.textDisabled}
+                                        value={ex.weight}
+                                        onChangeText={(v) => updateExercise(i, 'weight', v)}
+                                        keyboardType="decimal-pad"
+                                    />
+                                </View>
                             </View>
                         ))}
 
@@ -433,32 +442,60 @@ const styles = StyleSheet.create({
     scroll: { flex: 1 },
     scrollContent: { padding: Spacing.md, gap: Spacing.sm },
     formCard: { gap: Spacing.xs, marginBottom: Spacing.sm },
-    typeRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs },
+    typeRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs, flexWrap: 'wrap' },
     typeBtn: {
         flex: 1,
+        minWidth: 90,
         paddingVertical: Spacing.sm,
         borderRadius: Radius.sm,
         borderWidth: 1,
         borderColor: Colors.border,
         alignItems: 'center',
     },
-    exerciseRow: {
-        flexDirection: 'row',
-        gap: 4,
-        marginTop: Spacing.xs,
-        alignItems: 'center',
-    },
-    exInput: {
-        flex: 1,
-        backgroundColor: Colors.surfaceElevated,
+    exerciseCard: {
+        marginTop: Spacing.sm,
+        padding: Spacing.sm,
         borderWidth: 1,
         borderColor: Colors.border,
-        borderRadius: 6,
-        paddingHorizontal: 8,
-        paddingVertical: 6,
+        borderRadius: Radius.md,
+        backgroundColor: Colors.surfaceElevated,
+        gap: Spacing.xs,
+    },
+    exerciseHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    exerciseFieldGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+    },
+    exInputFull: {
+        width: '100%',
+        backgroundColor: Colors.surface,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
         color: Colors.textPrimary,
-        fontSize: 13,
-        minHeight: 38,
+        fontSize: 14,
+        minHeight: 42,
+    },
+    exInputGrid: {
+        flexBasis: '31%',
+        minWidth: 80,
+        flexGrow: 1,
+        backgroundColor: Colors.surface,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        color: Colors.textPrimary,
+        fontSize: 14,
+        minHeight: 42,
     },
     removeBtn: { paddingHorizontal: 4 },
     addExBtn: {

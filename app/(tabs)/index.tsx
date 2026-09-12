@@ -259,5 +259,12 @@ const styles = StyleSheet.create({
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
     header: { marginBottom: Spacing.sm },
     card: { gap: Spacing.xs },
-    weightRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.xs },
+    weightRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: Spacing.xs,
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+    },
 });

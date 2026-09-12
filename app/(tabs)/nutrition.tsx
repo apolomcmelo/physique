@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     },
     list: { flex: 1 },
     listContent: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.lg, gap: Spacing.sm },
-    foodCard: { gap: 4 },
-    macroLine: { marginTop: 2 },
-    ingredients: { marginTop: 4 },
+    foodCard: { gap: 4, overflow: 'hidden' },
+    macroLine: { marginTop: 2, flexShrink: 1 },
+    ingredients: { marginTop: 4, flexShrink: 1 },
 });
