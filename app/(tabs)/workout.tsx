@@ -28,6 +28,35 @@ interface ExerciseForm {
     weight: string;
 }
 
+type DayFilter = 'today' | number | 'unscheduled' | 'all';
+type SortOption = 'schedule' | 'name' | 'exerciseCount';
+
+const dayFilters: Array<{ label: string; value: DayFilter }> = [
+    { label: 'Hoje', value: 'today' },
+    { label: 'Segunda', value: 1 },
+    { label: 'Terça', value: 2 },
+    { label: 'Quarta', value: 3 },
+    { label: 'Quinta', value: 4 },
+    { label: 'Sexta', value: 5 },
+    { label: 'Sábado', value: 6 },
+    { label: 'Domingo', value: 0 },
+    { label: 'Sem agendamento', value: 'unscheduled' },
+    { label: 'Todos', value: 'all' },
+];
+
+const typeFilters: Array<{ label: string; value: WorkoutType | 'all' }> = [
+    { label: 'Todos', value: 'all' },
+    { label: 'Calistenia', value: 'Calisthenics' },
+    { label: 'HIT', value: 'HIT' },
+    { label: 'Musculação', value: 'Weightlifting' },
+];
+
+const sortOptions: Array<{ label: string; value: SortOption }> = [
+    { label: 'Horário', value: 'schedule' },
+    { label: 'Nome (A-Z)', value: 'name' },
+    { label: 'Exercícios', value: 'exerciseCount' },
+];
+
 /** Earliest scheduled workout first; unscheduled workouts go last. */
 function sortWorkoutsByScheduledAt(workouts: Workout[]): Workout[] {
     return [...workouts].sort((a, b) => {
@@ -38,6 +67,13 @@ function sortWorkoutsByScheduledAt(workouts: Workout[]): Workout[] {
     });
 }
 
+function compareBySchedule(a: Workout, b: Workout): number {
+    if (!a.scheduledAt && !b.scheduledAt) return 0;
+    if (!a.scheduledAt) return 1;
+    if (!b.scheduledAt) return -1;
+    return a.scheduledAt.getTime() - b.scheduledAt.getTime();
+}
+
 export default function WorkoutScreen() {
     const { workoutRepo } = useRepositories();
     const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -46,6 +82,9 @@ export default function WorkoutScreen() {
     const [showForm, setShowForm] = useState(false);
     const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
     const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+    const [dayFilter, setDayFilter] = useState<DayFilter>('all');
+    const [typeFilter, setTypeFilter] = useState<WorkoutType | 'all'>('all');
+    const [sortOption, setSortOption] = useState<SortOption>('schedule');
 
     // Add form state
     const [name, setName] = useState('');
@@ -202,6 +241,24 @@ export default function WorkoutScreen() {
         Weightlifting: Colors.warning,
     };
 
+    const visibleWorkouts = sortWorkoutsByScheduledAt(workouts)
+        .filter((workout) => {
+            if (dayFilter === 'all') return true;
+            if (dayFilter === 'unscheduled') return workout.scheduledAt === null;
+            if (!workout.scheduledAt) return false;
+            if (dayFilter === 'today') {
+                const today = new Date();
+                return workout.scheduledAt.toDateString() === today.toDateString();
+            }
+            return workout.scheduledAt.getDay() === dayFilter;
+        })
+        .filter((workout) => typeFilter === 'all' || workout.type === typeFilter)
+        .sort((a, b) => {
+            if (sortOption === 'name') return a.name.localeCompare(b.name, 'pt-BR');
+            if (sortOption === 'exerciseCount') return a.exercises.length - b.exercises.length;
+            return compareBySchedule(a, b);
+        });
+
     if (loading) {
         return (
             <View style={styles.centered}>
@@ -231,6 +288,69 @@ export default function WorkoutScreen() {
                     {error}
                 </TypographyText>
             )}
+
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterRow}
+            >
+                {dayFilters.map((filter) => (
+                    <TouchableOpacity
+                        key={filter.label}
+                        style={[styles.filterChip, dayFilter === filter.value && styles.activeFilterChip]}
+                        onPress={() => setDayFilter(filter.value)}
+                    >
+                        <TypographyText
+                            variant="label"
+                            color={dayFilter === filter.value ? Colors.background : Colors.textSecondary}
+                        >
+                            {filter.label}
+                        </TypographyText>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
+
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterRow}
+            >
+                {typeFilters.map((filter) => (
+                    <TouchableOpacity
+                        key={filter.label}
+                        style={[styles.filterChip, typeFilter === filter.value && styles.activeFilterChip]}
+                        onPress={() => setTypeFilter(filter.value)}
+                    >
+                        <TypographyText
+                            variant="label"
+                            color={typeFilter === filter.value ? Colors.background : Colors.textSecondary}
+                        >
+                            {filter.label}
+                        </TypographyText>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
+
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterRow}
+            >
+                {sortOptions.map((option) => (
+                    <TouchableOpacity
+                        key={option.value}
+                        style={[styles.filterChip, sortOption === option.value && styles.activeFilterChip]}
+                        onPress={() => setSortOption(option.value)}
+                    >
+                        <TypographyText
+                            variant="label"
+                            color={sortOption === option.value ? Colors.background : Colors.textSecondary}
+                        >
+                            {option.label}
+                        </TypographyText>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
 
             <ScrollView
                 style={styles.scroll}
@@ -370,7 +490,13 @@ export default function WorkoutScreen() {
                         action={{ label: '+ Novo Treino', onPress: openNewForm }}
                     />
                 ) : (
-                    workouts.map((workout) => (
+                    visibleWorkouts.length === 0 ? (
+                        <EmptyState
+                            icon="🔎"
+                            title="Nenhum treino encontrado"
+                            message="Ajuste os filtros para visualizar seus treinos."
+                        />
+                    ) : visibleWorkouts.map((workout) => (
                         <Card
                             key={workout.id}
                             style={styles.workoutCard}
@@ -452,6 +578,16 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     errorText: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
+    filterRow: { gap: Spacing.xs, paddingHorizontal: Spacing.md, paddingBottom: Spacing.xs },
+    filterChip: {
+        paddingVertical: Spacing.xs,
+        paddingHorizontal: Spacing.sm,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: Radius.full,
+        backgroundColor: Colors.surface,
+    },
+    activeFilterChip: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     scroll: { flex: 1 },
     scrollContent: { padding: Spacing.md, gap: Spacing.sm },
     formCard: { gap: Spacing.xs, marginBottom: Spacing.sm },

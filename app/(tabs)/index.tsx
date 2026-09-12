@@ -13,7 +13,7 @@ import { WeightRecord } from '../../src/domain/entities/WeightRecord';
 import { Workout } from '../../src/domain/entities/Workout';
 import { getItem } from '../../src/adapters/local/LocalStorage';
 import { getNextMeal } from '../../src/domain/use-cases/meal/GetNextMeal';
-import { getNextWorkout } from '../../src/domain/use-cases/workout/GetNextWorkout';
+import { getNextScheduledWorkout, getNextWorkout } from '../../src/domain/use-cases/workout/GetNextWorkout';
 import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { ProgressBar } from '../../src/ui/components/ProgressBar';
@@ -28,6 +28,7 @@ export default function DashboardScreen() {
     const [user, setUser] = useState<User | null>(null);
     const [latestWeight, setLatestWeight] = useState<WeightRecord | null>(null);
     const [nextWorkout, setNextWorkout] = useState<Workout | null>(null);
+    const [fallbackWorkout, setFallbackWorkout] = useState<Workout | null>(null);
     const [nextMeal, setNextMeal] = useState<MealPlanEntry | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -56,6 +57,7 @@ export default function DashboardScreen() {
                 ]);
                 setNextWorkout(nw);
                 setNextMeal(nm);
+                setFallbackWorkout(nw ? null : await getNextScheduledWorkout(workoutRepo, now));
 
                 const savedInterval = await getItem<number>('water_reminder_interval_ms');
                 if (savedInterval && savedInterval > 0) {
@@ -84,6 +86,8 @@ export default function DashboardScreen() {
 
     function formatMinutesUntil(date: Date): string {
         const diff = Math.round((date.getTime() - Date.now()) / 60000);
+        if (diff === 0) return 'Agora';
+        if (diff < 0) return `Há ${Math.abs(diff)} minutos`;
         if (diff < 60) return `Em ${diff} minutos`;
         const h = Math.floor(diff / 60);
         const m = diff % 60;
@@ -186,7 +190,7 @@ export default function DashboardScreen() {
                 </Card>
 
                 {/* Next Workout Card */}
-                <Card style={styles.card}>
+                <Card style={styles.card} onPress={() => nextWorkout && setSelectedWorkout(nextWorkout)}>
                     <TypographyText variant="label" color={Colors.textSecondary}>
                         PRÓXIMO TREINO
                     </TypographyText>
@@ -205,9 +209,16 @@ export default function DashboardScreen() {
                             </TypographyText>
                         </View>
                     ) : (
-                        <TypographyText variant="body" color={Colors.textDisabled} style={{ marginTop: Spacing.xs }}>
-                            Nenhum treino agendado
-                        </TypographyText>
+                        <View style={{ marginTop: Spacing.xs }}>
+                            <TypographyText variant="body" color={Colors.textDisabled}>
+                                Nenhum treino na próxima hora
+                            </TypographyText>
+                            {fallbackWorkout?.scheduledAt && (
+                                <TypographyText variant="bodySmall" color={Colors.textSecondary}>
+                                    Próximo: {fallbackWorkout.name} em {fallbackWorkout.scheduledAt.toLocaleDateString('pt-BR')} às {fallbackWorkout.scheduledAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                </TypographyText>
+                            )}
+                        </View>
                     )}
                 </Card>
 
