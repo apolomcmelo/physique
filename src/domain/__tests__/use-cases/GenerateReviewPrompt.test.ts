@@ -62,4 +62,13 @@ describe('generateReviewPrompt', () => {
         // The summary includes "${s.sets.length} sets completed"
         expect(result).toContain(`${mockWorkoutSession.sets.length} sets completed`);
     });
+
+    it('contains CSV header structure and workout rules with rest intervals', () => {
+        expect(result).toContain('dia;horário;atividade/refeição;o que fazer/o que comer;foco/motivo');
+        expect(result).toContain('Calistenia');
+        expect(result).toContain('Musculação');
+        expect(result).toContain('HIT');
+        expect(result).toContain('descanso');
+        expect(result).toContain('transição');
+    });
 });

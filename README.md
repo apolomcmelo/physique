@@ -30,22 +30,43 @@ dia;horário;atividade/refeição;o que fazer/o que comer;foco/motivo
 
 ### Exercise prescription syntax
 
-Workout descriptions are split into exercises on `+`. Each exercise follows the pattern:
+Workout descriptions are split into exercises separated by `+`. Each exercise is sequentially indexed (`orderIndex`) to preserve workout order.
+
+The general exercise pattern is:
 
 ```
-<sets>x <reps or duration> <name> (<weight>)
+<sets>x <reps or duration> <name> (<weight>) (<rest intervals>)
 ```
 
-Examples from a valid workout row:
+#### Supported forms:
 
+- **Reps-based exercises**:
+  - `4x 10-12 Flexão declinada` — 4 sets of 10–12 reps (the lower bound `10` is stored as target reps).
+  - `3x 10 Supino reto` — 3 sets of 10 reps.
+- **Time-based exercises**:
+  - `4x 45s Wall sit` — 4 sets of 45 seconds (stored as `durationSeconds: 45`).
+  - `3x 1:20min Prancha` — 3 sets of 1 minute and 20 seconds (`durationSeconds: 80`).
+- **Load / Weight annotations**:
+  - `(7kg)` or `(4.5kg)` — extracts numeric weight in kg (stored in `weightKg`).
+  - `(2 anilhas de 1.5kg)` — parses `1.5` as weight and stores additional detail in notes.
+- **Rest Intervals** (rest between series vs. rest before next exercise):
+  - **Both intervals inline**: `(descanso: 15s / 30s transição)` or `(rest: 15s, 30s proximo)` — sets 15 seconds rest between sets (`restSecondsBetweenSets`) and 30 seconds before moving to the next exercise (`restSecondsBeforeNextExercise`).
+  - **Transition only inline**: `(transição: 30s)` or `(próximo 45s)` — sets rest before the next exercise.
+  - **Standalone rest segment**: `+ 15s rest`, `+ 30s descanso`, or `+ 45s transição` — sets the transition rest on the preceding exercise.
+- **Shared set prefix**:
+  - `3 séries: 45s prancha + 35s wall sit (4.5kg) + 26 shoulder taps` — applies 3 sets to all exercises in the row.
+- **Alternative exercises**:
+  - `3x 12 Bicep curl (4kg) / KB halo (7.5kg)` — the alternative after `/` is stored in notes (`ou KB halo (7.5kg)`).
+- **Free text / HIT videos**:
+  - `20 a 25 minutos de treino HIIT ou Tabata` — imported as a notes-only exercise for circuit/video-based training without fixed set/rep structure.
+
+### Example CSV
+
+```csv
+dia;horário;atividade/refeição;o que fazer/o que comer;foco/motivo
+Segunda-feira;07:00;Café da Manhã;2 fatias de pão integral + 3 ovos mexidos + 1 banana;Aporte proteico e energia
+Segunda-feira;18:30;Musculação;4x 10-12 Flexão declinada (descanso: 15s / 30s transição) + 3x 10-12 Pullover (7kg) (descanso: 20s / 30s transição) + 3x 12-15 Tríceps testa (5kg);Peitoral e Tríceps
+Terça-feira;07:00;Calistenia;3 séries: 45s Prancha + 35s Wall sit (4.5kg) + 26 Shoulder taps + 30s descanso;Core e Pernas
+Quarta-feira;18:30;Musculação;3x 12-15 Bicep curl (4kg) / KB halo (7.5kg) + 3x 45s Prancha + 15s rest;Braços e Core
+Quinta-feira;06:30;HIT;20 a 25 minutos de treino HIIT ou Tabata;Cardio e Queima de Gordura
 ```
-Segunda-feira;18:30;Musculação;4x 10-12 Flexão declinada + 3x 10-12 Pullover (7kg) + 4x 45s Wall sit (4.5kg);Hipertrofia do peitoral
-```
-
-Supported forms:
-
-- `4x 10-12 Flexão declinada` — 4 sets of 10–12 reps (the lower bound is stored as the target)
-- `4x 45s Wall sit (4.5kg)` — time-based sets; duration is kept in the exercise notes
-- `3 séries: 45s prancha + 26 shoulder taps` — an `N séries:` prefix applies the set count to every exercise in the list
-- `3x 12 Bicep curl (4kg) / KB halo (7.5kg)` — a `/` alternative is stored in the primary exercise's notes
-- Free text without a prescription (e.g. `20 a 25 minutos de treino HIIT ou Tabata`) is imported as a notes-only exercise — HIT workouts follow videos, so they have no fixed sets/reps

@@ -24,4 +24,13 @@ describe('generateNewPlanPrompt', () => {
     it("contains user's objective in the output", () => {
         expect(result).toContain(mockUser.objective);
     });
+
+    it('contains CSV header structure and workout rules with rest intervals', () => {
+        expect(result).toContain('dia;horário;atividade/refeição;o que fazer/o que comer;foco/motivo');
+        expect(result).toContain('Calistenia');
+        expect(result).toContain('Musculação');
+        expect(result).toContain('HIT');
+        expect(result).toContain('descanso');
+        expect(result).toContain('transição');
+    });
 });

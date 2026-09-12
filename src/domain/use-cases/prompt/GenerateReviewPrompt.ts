@@ -98,9 +98,26 @@ ${foodSummary || 'No food items registered.'}
 
 ## Instructions
 Based on the user's progress and current plan:
-1. Evaluate the effectiveness of the current nutrition and workout plan
-2. Identify areas of improvement
-3. Provide an updated 7-day meal plan as CSV (dia;horário;atividade/refeição;o que fazer/o que comer;foco/motivo)
-4. Suggest workout adjustments if needed
-5. Highlight key observations about the user's progress toward their goal of ${user.goalWeight}kg`;
+1. Evaluate the effectiveness of the current nutrition and workout plan.
+2. Identify areas of improvement.
+3. Provide an updated 7-day combined meal and workout plan as a single CSV formatted with columns:
+   dia;horário;atividade/refeição;o que fazer/o que comer;foco/motivo
+
+   **CSV formatting rules (strictly follow these):**
+   - "dia": Portuguese weekday name (e.g. "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo").
+   - "horário": start time only in HH:MM format (e.g. "07:30"). Do NOT use ranges (e.g. "07:30-08:30").
+   - "atividade/refeição": for workout sessions use ONLY one of the exact values: "Calistenia", "HIT", or "Musculação". For meals use descriptive names (e.g. "Café da Manhã", "Almoço", "Lanche da Tarde", "Jantar", "Ceia").
+   - "o que fazer/o que comer":
+     - For meals: describe foods, ingredients, and portion sizes (e.g. "2 fatias de pão integral + 3 ovos mexidos + 1 banana").
+     - For workouts: list exercises separated by "+". Follow the prescription syntax:
+       * Rep-based: "<sets>x <reps> <Nome do Exercício>" (e.g. "4x 10-12 Flexão declinada", "3x 10 Supino reto").
+       * Time-based: "<sets>x <duração>s ou min <Nome>" (e.g. "4x 45s Wall sit", "3x 1:20min Prancha").
+       * Weight / load: include in parentheses with kg (e.g. "(7kg)", "(4.5kg)").
+       * Rest intervals: include rest between series and rest before next exercise (e.g. "(descanso: 15s / 30s transição)", "(rest: 15s, 30s proximo)", or trailing "+ 15s rest").
+       * Shared sets prefix: "3 séries: 45s prancha + 35s wall sit (4.5kg) + 26 shoulder taps".
+       * Alternatives: separate with "/" (e.g. "3x 12-15 Bicep curl (4kg) / KB halo (7.5kg)").
+       * Free-text / HIIT: for video/circuit sessions without fixed reps, provide descriptive text (e.g. "20 a 25 minutos de treino HIIT ou Tabata").
+   - "foco/motivo": for workouts, the muscle group / workout focus (e.g. "Peitoral e Tríceps", "Core & Estabilidade"). For meals, the biological/nutritional objective (e.g. "Aporte proteico e fibras", "Recuperação pós-treino").
+
+4. Highlight key observations, adjustments made, and recommendations for the user's progress toward their goal of ${user.goalWeight}kg.`;
 }
