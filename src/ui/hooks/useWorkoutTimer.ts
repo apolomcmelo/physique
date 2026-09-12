@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { playTimerCue } from '../utils/sound';
 
 interface WorkoutTimerState {
     seconds: number;
@@ -12,6 +13,7 @@ export const useWorkoutTimer = (): WorkoutTimerState => {
     const [seconds, setSeconds] = useState(0);
     const [isRunning, setIsRunning] = useState(false);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const secondsRef = useRef(0);
 
     const clearTimer = () => {
         if (intervalRef.current !== null) {
@@ -22,19 +24,20 @@ export const useWorkoutTimer = (): WorkoutTimerState => {
 
     const start = useCallback((durationSecs: number) => {
         clearTimer();
+        secondsRef.current = durationSecs;
         setSeconds(durationSecs);
         setIsRunning(true);
+        void playTimerCue(durationSecs);
 
         intervalRef.current = setInterval(() => {
-            setSeconds((prev) => {
-                if (prev <= 1) {
-                    clearInterval(intervalRef.current!);
-                    intervalRef.current = null;
-                    setIsRunning(false);
-                    return 0;
-                }
-                return prev - 1;
-            });
+            const next = Math.max(0, secondsRef.current - 1);
+            secondsRef.current = next;
+            setSeconds(next);
+            void playTimerCue(next);
+            if (next === 0) {
+                clearTimer();
+                setIsRunning(false);
+            }
         }, 1000);
     }, []);
 

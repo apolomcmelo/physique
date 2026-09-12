@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme';
+import { playTimerCue } from '../utils/sound';
 
 interface WorkoutTimerProps {
     durationSeconds: number;
@@ -26,15 +27,7 @@ export const WorkoutTimer = ({
         if (!autoStart) return;
 
         intervalRef.current = setInterval(() => {
-            setRemaining((prev) => {
-                if (prev <= 1) {
-                    clearInterval(intervalRef.current!);
-                    intervalRef.current = null;
-                    onCompleteRef.current();
-                    return 0;
-                }
-                return prev - 1;
-            });
+            setRemaining((prev) => Math.max(0, prev - 1));
         }, 1000);
 
         return () => {
@@ -43,6 +36,18 @@ export const WorkoutTimer = ({
             }
         };
     }, [autoStart, durationSeconds]);
+
+    useEffect(() => {
+        if (!autoStart) return;
+        void playTimerCue(remaining);
+        if (remaining !== 0) return;
+
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+        onCompleteRef.current();
+    }, [autoStart, remaining]);
 
     const minutes = Math.floor(remaining / 60);
     const seconds = remaining % 60;
