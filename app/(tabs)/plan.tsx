@@ -19,6 +19,8 @@ import { MealPlanEntry } from '../../src/domain/entities/MealPlan';
 import { Workout, WorkoutType } from '../../src/domain/entities/Workout';
 import { parseCsvMealPlan } from '../../src/domain/use-cases/meal/ParseCsvMealPlan';
 import { parseCsvWorkouts } from '../../src/domain/use-cases/workout/ParseCsvWorkouts';
+import { WorkoutDetailModal } from '../../src/ui/components/WorkoutDetailModal';
+import { router } from 'expo-router';
 
 interface TimelineItem {
     id: string;
@@ -115,6 +117,7 @@ export default function PlanScreen() {
     const [importing, setImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [dayFilter, setDayFilter] = useState('today');
+    const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
 
     useEffect(() => {
         loadEntries();
@@ -253,7 +256,14 @@ export default function PlanScreen() {
                     showsVerticalScrollIndicator={false}
                 >
                     {filteredTimeline.map((item) => (
-                        <Card key={item.id} style={styles.entryCard}>
+                        <Card
+                            key={item.id}
+                            style={styles.entryCard}
+                            onPress={() => {
+                                const workout = workouts.find((candidate) => candidate.id === item.id);
+                                if (workout) setSelectedWorkout(workout);
+                            }}
+                        >
                             <View style={styles.entryHeader}>
                                 <TypographyText variant="h4" color={Colors.primary}>
                                     {item.time}
@@ -281,6 +291,15 @@ export default function PlanScreen() {
                     ))}
                 </ScrollView>
             )}
+            <WorkoutDetailModal
+                visible={selectedWorkout !== null}
+                workout={selectedWorkout}
+                onClose={() => setSelectedWorkout(null)}
+                onStart={(workout) => {
+                    setSelectedWorkout(null);
+                    router.push(`/workout/active?id=${workout.id}`);
+                }}
+            />
         </SafeAreaView>
     );
 }

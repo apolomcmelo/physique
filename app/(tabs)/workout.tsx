@@ -16,6 +16,7 @@ import { Card } from '../../src/ui/components/Card';
 import { EmptyState } from '../../src/ui/components/EmptyState';
 import { Input } from '../../src/ui/components/Input';
 import { Typography as TypographyText } from '../../src/ui/components/Typography';
+import { WorkoutDetailModal } from '../../src/ui/components/WorkoutDetailModal';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { confirmAsync } from '../../src/ui/utils/dialogs';
 import { Colors, Radius, Spacing, Typography } from '../../src/ui/theme';
@@ -44,6 +45,7 @@ export default function WorkoutScreen() {
     const [error, setError] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
+    const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
 
     // Add form state
     const [name, setName] = useState('');
@@ -95,6 +97,7 @@ export default function WorkoutScreen() {
     }
 
     function openEditForm(workout: Workout) {
+        setSelectedWorkout(null);
         setEditingWorkout(workout);
         setName(workout.name);
         setType(workout.type);
@@ -371,7 +374,7 @@ export default function WorkoutScreen() {
                         <Card
                             key={workout.id}
                             style={styles.workoutCard}
-                            onPress={() => router.push(`/workout/active?id=${workout.id}`)}
+                            onPress={() => setSelectedWorkout(workout)}
                         >
                             <View style={styles.workoutCardHeader}>
                                 <TypographyText variant="h4" color={Colors.textPrimary}>
@@ -416,6 +419,16 @@ export default function WorkoutScreen() {
                     ))
                 )}
             </ScrollView>
+            <WorkoutDetailModal
+                visible={selectedWorkout !== null}
+                workout={selectedWorkout}
+                onClose={() => setSelectedWorkout(null)}
+                onEdit={openEditForm}
+                onStart={(workout) => {
+                    setSelectedWorkout(null);
+                    router.push(`/workout/active?id=${workout.id}`);
+                }}
+            />
         </SafeAreaView>
     );
 }

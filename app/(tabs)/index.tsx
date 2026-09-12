@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { router } from 'expo-router';
 import {
     ActivityIndicator,
     ScrollView,
@@ -17,6 +18,7 @@ import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { ProgressBar } from '../../src/ui/components/ProgressBar';
 import { Typography as TypographyText } from '../../src/ui/components/Typography';
+import { WorkoutDetailModal } from '../../src/ui/components/WorkoutDetailModal';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Spacing } from '../../src/ui/theme';
 
@@ -29,6 +31,7 @@ export default function DashboardScreen() {
     const [nextMeal, setNextMeal] = useState<MealPlanEntry | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
 
     const [waterPhase, setWaterPhase] = useState<'remind' | 'done'>('remind');
     const waterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -156,7 +159,7 @@ export default function DashboardScreen() {
                 )}
 
                 {/* Weight Card */}
-                <Card style={styles.card}>
+                <Card style={styles.card} onPress={() => nextWorkout && setSelectedWorkout(nextWorkout)}>
                     <TypographyText variant="label" color={Colors.textSecondary}>
                         PESO
                     </TypographyText>
@@ -248,6 +251,15 @@ export default function DashboardScreen() {
                 </Card>
 
             </ScrollView>
+            <WorkoutDetailModal
+                visible={selectedWorkout !== null}
+                workout={selectedWorkout}
+                onClose={() => setSelectedWorkout(null)}
+                onStart={(workout) => {
+                    setSelectedWorkout(null);
+                    router.push(`/workout/active?id=${workout.id}`);
+                }}
+            />
         </SafeAreaView>
     );
 }
