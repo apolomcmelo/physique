@@ -10,9 +10,9 @@ Atualizado em 25/09/2026. Substitui o checklist inicial de construção do zero.
 
 Objetivo: concluir **todos os grupos funcionais originais** e corrigir bugs introduzidos, preservando melhorias compatíveis. A ordem abaixo é uma proposta técnica baseada em dependências e impacto, não uma redução de escopo.
 
-A revisão funcional foi estática. Arquivos existentes não provam funcionalidade completa. Na atualização documental, `npm test -- --runInBand` foi tentado, mas a suíte não iniciou: `sh: jest: command not found` (dependências ausentes). Exportação web, dispositivos e serviços implantados não foram verificados; não há baseline de testes passando ou de falhas conhecidas estabelecido.
+A revisão funcional original foi estática. Posteriormente, `npm ci`, Jest, TypeScript e exportação web passaram; um teste de políticas/RPCs foi ensaiado em PostgreSQL descartável (detalhes em P0). Dispositivos e serviços implantados continuam não verificados.
 
-Stack declarada em `package.json`: Expo `~52.0.46`, React Native `0.76.9`, React `18.3.1`, TypeScript `^5.3.3`, Supabase JS `^2.45.4`, Jest `^29.7.0` e Tesseract.js `^5.1.0`. Não há lockfile versionado no estado revisado. O alvo aprovado é web/PWA, não entrega nativa.
+Stack declarada em `package.json`: Expo `~52.0.46`, React Native `0.76.9`, React `18.3.1`, TypeScript `^5.3.3`, Supabase JS `^2.45.4`, Jest `^29.7.0` e Tesseract.js `^5.1.0`. Lockfile gerado nesta revisão, ainda sem commit autorizado. O alvo aprovado é web/PWA, não entrega nativa.
 
 ## 2. Inventário de implementação e rastreabilidade
 
@@ -54,11 +54,11 @@ Não é necessário introduzir um servidor Node genérico para tudo. Operações
 
 Requisitos: BASE, HIS. Pré-requisito dos incrementos com persistência.
 
-- [ ] Estabelecer instalação reproduzível/toolchain e executar o gate; `setupFilesAfterEnv` corrigido em `package.json` e coberto por teste (25/09/2026). Com instalação sem lockfile, domínio: 16 suítes/115 testes passando; Jest completo: 34 suítes/169 testes passando. Gate ainda incompleto: `tsc` acusa ausência de declaração de `react-test-renderer` em teste existente; export web não resolve `query-string` do `expo-router`. Reprodutibilidade e exportação pendentes.
-- [ ] Verificar RLS de exercícios/filhos e acesso a arquivos entre duas contas; corrigir política permissiva e compatibilidade de links privados. Não inferir estado dos buckets implantados a partir do SQL.
-- [ ] Proteger histórico contra exclusão/edição de modelos; planejar snapshot/backfill antes de modificar IDs/relações. Revisar divergência de cascata local/Supabase.
-- [ ] Reproduzir falhas de `updateWorkout` após exclusão de exercícios e da importação entre refeições/treinos; estabelecer gravação atômica ou recuperação que mantenha a rotina anterior íntegra e evite duplicação por retry.
-- [ ] Corrigir reidratação de datas e isolamento de caches onde esses adaptadores continuarem utilizados.
+- [x] Estabelecer instalação reproduzível de dependências e executar o gate: `setupFilesAfterEnv` corrigido e coberto por teste; `@types/react-test-renderer` e `query-string` declarados; `package-lock.json` gerado e liberado do `.gitignore` (25/09/2026; ainda não versionado até commit). `npm ci` removeu e reinstalou `node_modules` no repositório com sucesso; domínio: 16 suítes/115 testes; Jest completo: 34 suítes/169 testes; `npx tsc --noEmit` passou; `npx expo export --platform web` exportou 24 rotas estáticas. Reprodutibilidade ainda depende de runtime compatível (verificado com Node 26.3.0/npm 11.16.0); navegadores e serviços implantados não foram verificados.
+- [ ] Isolamento: `007_p0_account_isolation.sql` remove `allow_all_exercises`, limita exercícios ao dono do treino e muda buckets `photos`/`exams` para privados; `privateFiles.ts` usa URL assinada para visualização de fotos e referências antigas. Teste com duas identidades em PostgreSQL descartável verificou leitura/gravação de exercícios, arquivos e histórico. **Pendente externo:** inspecionar políticas/buckets realmente implantados, confirmar dois usuários via Supabase Storage/PostgREST e migrar links já compartilhados; URLs públicas antigas deixarão de funcionar.
+- [ ] Retenção: `008_p0_history_retention.sql` faz backfill de nomes/prescrições ainda disponíveis e tira cascata da FK sessão→treino, mantendo UUID histórico; snapshots de sessões/séries novas são criados no banco. Teste PostgreSQL conservou série/nomes após apagar modelo; exclusão explícita da sessão remove suas séries. **Pendente:** dados já perdidos em edições antigas não são reconstruíveis; ensaio com cópia real de dados legados e interface de correção/exclusão confirmada permanecem necessários.
+- [x] Gravações: RPCs `009`–`011` e adapters fazem criação/edição de treino, importação conjunta e sessão+séries em transações únicas; importação é deduplicada por usuário+conteúdo e erros não deixam refeições/treinos parciais. Teste PostgreSQL injeta falhas no filho, verifica rollback, retry e preservação de IDs. O caminho local agora grava refeições/treinos e identificador de importação em um único snapshot AsyncStorage por conta; testes injetam quota, perda de resposta, retries simultâneos, troca de conta, edição concorrente e reabertura. Prévia/ativação e recorrência/versões da rotina pertencem a P2, não à proteção de gravação P0. A garantia local é por operação na instância do navegador; o browser pode remover dados locais.
+- [x] Reidratação de `uploadedAt` em `LocalExamRepository` coberta por teste; `LocalStorage` usa chave por usuário autenticado e ignora chaves globais antigas para não expor registros de outra conta. Dados locais legados são preservados mas ficam inacessíveis até reconciliação segura de propriedade; OFF/P3 tratará limpeza de pendências ao sair da conta. Gate ao final: domínio 16 suítes/115 testes, Jest 40 suítes/199 testes, TypeScript sem erros e export web de 24 rotas; script `scripts/p0-db-check.js` passou duas vezes em PostgreSQL 16.8 descartável. Não houve teste de serviço Supabase real.
 
 Aceite: usuário B não acessa registros/arquivos de A; remover um modelo não elimina histórico realizado; falhas injetadas não deixam rotina ativa pela metade; comandos e resultados do gate registrados.
 
@@ -180,11 +180,11 @@ npx expo export --platform web
 
 ## 6. Rastreabilidade das fases originais
 
-| Fase original | Continuação neste plano |
-|---|---|
-| 1. Fundação, setup e domínio | P0; suporte PWA e acessibilidade em P8 |
-| 2. Dados e Plano do Dia | P2 e P4; Dashboard em P8 |
-| 3. Dinâmica de treinos | P1, P3 e lembretes em P8 |
-| 4. Prompts e histórico | P4, P7 e retenção em P0 |
-| 5. Sensores, câmera, exames e OCR | P5, P6 e lembretes em P8 |
-| 6. Refinamento e lançamento | Gate por incremento, matriz web e documentação; nenhum grupo original descartado |
+| Fase original                     | Continuação neste plano                                                          |
+|-----------------------------------|----------------------------------------------------------------------------------|
+| 1. Fundação, setup e domínio      | P0; suporte PWA e acessibilidade em P8                                           |
+| 2. Dados e Plano do Dia           | P2 e P4; Dashboard em P8                                                         |
+| 3. Dinâmica de treinos            | P1, P3 e lembretes em P8                                                         |
+| 4. Prompts e histórico            | P4, P7 e retenção em P0                                                          |
+| 5. Sensores, câmera, exames e OCR | P5, P6 e lembretes em P8                                                         |
+| 6. Refinamento e lançamento       | Gate por incremento, matriz web e documentação; nenhum grupo original descartado |

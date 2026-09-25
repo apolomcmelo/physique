@@ -236,8 +236,7 @@ export default function SettingsScreen() {
 
                 if (uploadError) throw new Error(uploadError.message);
 
-                const { data: publicData } = supabase.storage.from('exams').getPublicUrl(storagePath);
-                fileUrl = publicData.publicUrl;
+                fileUrl = storagePath;
             }
 
             const exam = createExam({

@@ -18,7 +18,7 @@ The September 2026 static review found final-set recording, prescribed-rest, CSV
 
 ## Development setup
 
-1. Install dependencies with `npm install`.
+1. Install dependencies with `npm ci` using `package-lock.json` and repository `.npmrc` (`legacy-peer-deps=true`).
 2. Create `.env.local` using `.env.example` as the template:
 
    ```dotenv
@@ -35,6 +35,8 @@ The September 2026 static review found final-set recording, prescribed-rest, CSV
 
 `EXPO_PUBLIC_USE_LOCAL_DB=true` selects local repository adapters, but **does not bypass Supabase authentication or implement cloud synchronization**. It is not the planned offline-workout recovery feature.
 
+The local CSV import stores meals, workouts and its retry identifier in one account-scoped browser-storage record; a failed storage write leaves the previous record readable, and repeating the same CSV does not append duplicates. Browser storage can still be evicted or cleared. This does not implement recurring active/pending plan versions, which belong to the later CSV/routine phase.
+
 ### Checks and deployment commands
 
 | Command | Current behavior |
@@ -47,11 +49,11 @@ The September 2026 static review found final-set recording, prescribed-rest, CSV
 | `npm run migrate` | Apply numbered SQL migrations to the database in `SUPABASE_DB_URL`. |
 | `npm run build` | **Run migrations, then export web assets.** |
 
-The full Jest configuration uses `setupFilesAfterEnv`, and its native matcher setup has a regression test. With dependencies installed on 25/09/2026, the domain suite passed (115 tests) and full Jest suite passed (169 tests). TypeScript still reports a missing `react-test-renderer` declaration in `src/ui/hooks/__tests__/useAccelerometer.test.tsx`; web export is blocked by an unresolved `query-string` import from `expo-router`. These checks do not verify deployed services or browsers. No lint script is declared.
+The full Jest configuration uses `setupFilesAfterEnv`, and its native matcher setup has a regression test. On 25/09/2026, `npm ci` removed and reinstalled the repository's existing `node_modules` from the new lockfile; the domain suite passed (115 tests), the full Jest suite passed (169 tests), `npx tsc --noEmit` passed, and `npx expo export --platform web` exported 24 static routes. The latter checks require explicit `@types/react-test-renderer` and `query-string` dependencies. The lockfile records resolved packages, but does not pin the Node/npm runtime or prove deployed services and browsers. No lint script is declared.
 
 `scripts/migrate.js` reads `.env.local`, tracks applied files in `schema_migrations`, and runs each numbered file from `src/infrastructure/supabase/migrations/` in its own transaction. A failure rolls back that file, not earlier migrations. Use an identified test database for migration verification; an existing schema without the runner's history may need reconciliation before running the initial migration.
 
-Vercel is configured to run `npm run build` and serve `dist/`. Configure environment variables there accordingly. `npm run build` is not a database-free build check. Storage privacy and account isolation are review items; current upload code uses public-URL helpers, so private-file behavior must not be inferred from the presence of storage policies alone.
+Vercel is configured to run `npm run build` and serve `dist/`. Configure environment variables there accordingly. `npm run build` is not a database-free build check. The P0 migrations and client changes use owner-scoped exercise policies, private `photos`/`exams` buckets, and signed URLs for photo display (including old public-URL rows). They have only been rehearsed against disposable local PostgreSQL, not a deployed Supabase instance. Applying the bucket migration will invalidate old public links; reconcile legacy ownership and validate existing files/bucket settings before deploying it. Exam download and attachment UX remain P6 work.
 
 ## Reviewed behaviour to complete
 

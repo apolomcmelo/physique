@@ -7,6 +7,15 @@ export interface CompletedSet {
     repsCompleted: number;
     weightUsedKg: number | null;
     completedAt: Date;
+    exerciseName?: string | null;
+    prescribedReps?: number | null;
+    prescribedWeightKg?: number | null;
+    prescribedDurationSeconds?: number | null;
+    prescribedSets?: number | null;
+    exerciseNotes?: string | null;
+    exerciseOrderIndex?: number | null;
+    prescribedRestBetweenSets?: number | null;
+    prescribedRestBeforeNextExercise?: number | null;
 }
 
 export interface WorkoutSession {
@@ -15,6 +24,9 @@ export interface WorkoutSession {
     startedAt: Date;
     finishedAt: Date | null;
     sets: CompletedSet[];
+    workoutName?: string | null;
+    workoutType?: string | null;
+    workoutScheduledAt?: Date | null;
 }
 
 export type CreateCompletedSetParams = Omit<CompletedSet, 'id'>;

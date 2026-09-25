@@ -38,6 +38,9 @@ interface WorkoutSessionRow {
     finished_at: string | null;
     created_at: string;
     completed_sets?: CompletedSetRow[];
+    workout_name?: string | null;
+    workout_type?: string | null;
+    workout_scheduled_at?: string | null;
 }
 
 interface CompletedSetRow {
@@ -48,6 +51,15 @@ interface CompletedSetRow {
     reps_completed: number;
     weight_used_kg: number | null;
     completed_at: string;
+    exercise_name?: string | null;
+    prescribed_reps?: number | null;
+    prescribed_weight_kg?: number | null;
+    prescribed_duration_seconds?: number | null;
+    prescribed_sets?: number | null;
+    exercise_notes?: string | null;
+    exercise_order_index?: number | null;
+    prescribed_rest_between_sets?: number | null;
+    prescribed_rest_before_next_exercise?: number | null;
 }
 
 // ── Mappers ──────────────────────────────────────────────────────────────────
@@ -87,6 +99,15 @@ function rowToCompletedSet(row: CompletedSetRow): CompletedSet {
         repsCompleted: row.reps_completed,
         weightUsedKg: row.weight_used_kg,
         completedAt: new Date(row.completed_at),
+        exerciseName: row.exercise_name ?? null,
+        prescribedReps: row.prescribed_reps ?? null,
+        prescribedWeightKg: row.prescribed_weight_kg ?? null,
+        prescribedDurationSeconds: row.prescribed_duration_seconds ?? null,
+        prescribedSets: row.prescribed_sets ?? null,
+        exerciseNotes: row.exercise_notes ?? null,
+        exerciseOrderIndex: row.exercise_order_index ?? null,
+        prescribedRestBetweenSets: row.prescribed_rest_between_sets ?? null,
+        prescribedRestBeforeNextExercise: row.prescribed_rest_before_next_exercise ?? null,
     };
 }
 
@@ -97,6 +118,9 @@ function rowToWorkoutSession(row: WorkoutSessionRow): WorkoutSession {
         startedAt: new Date(row.started_at),
         finishedAt: row.finished_at ? new Date(row.finished_at) : null,
         sets: (row.completed_sets ?? []).map(rowToCompletedSet),
+        workoutName: row.workout_name ?? null,
+        workoutType: row.workout_type ?? null,
+        workoutScheduledAt: row.workout_scheduled_at ? new Date(row.workout_scheduled_at) : null,
     };
 }
 
@@ -132,94 +156,46 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
 
     async saveWorkout(workout: Workout): Promise<void> {
         const userId = await requireAuthUserId();
-        const { error: workoutError } = await supabase.from('workouts').insert({
-            id: workout.id,
-            name: workout.name,
-            type: workout.type,
-            scheduled_at: workout.scheduledAt?.toISOString() ?? null,
-            created_at: workout.createdAt.toISOString(),
-            updated_at: workout.updatedAt.toISOString(),
-            user_id: userId,
-        });
-
-        if (workoutError) {
-            throw new Error(`Failed to save workout: ${workoutError.message}`);
-        }
-
-        if (workout.exercises.length > 0) {
-            const exerciseRows = workout.exercises.map((e, index) => ({
-                id: e.id,
-                workout_id: workout.id,
-                name: e.name,
-                order_index: e.orderIndex ?? index,
-                sets: e.sets,
-                reps_per_set: e.repsPerSet,
-                weight_kg: e.weightKg,
+        const { error } = await supabase.rpc('create_workout_atomically', {
+            p_workout: {
+                id: workout.id, name: workout.name, type: workout.type,
+                scheduled_at: workout.scheduledAt?.toISOString() ?? null,
+                created_at: workout.createdAt.toISOString(),
+                updated_at: workout.updatedAt.toISOString(), user_id: userId,
+            },
+            p_exercises: workout.exercises.map((e, index) => ({
+                id: e.id, workout_id: workout.id, name: e.name,
+                order_index: e.orderIndex ?? index, sets: e.sets,
+                reps_per_set: e.repsPerSet, weight_kg: e.weightKg,
                 duration_seconds: e.durationSeconds,
                 rest_seconds_between_sets: e.restSecondsBetweenSets ?? null,
                 rest_seconds_before_next_exercise: e.restSecondsBeforeNextExercise ?? null,
                 notes: e.notes,
-                created_at: new Date().toISOString(),
-            }));
-
-            const { error: exercisesError } = await supabase.from('exercises').insert(exerciseRows);
-
-            if (exercisesError) {
-                throw new Error(`Failed to save exercises: ${exercisesError.message}`);
-            }
-        }
+            })),
+        });
+        if (error) throw new Error(`Failed to save workout: ${error.message}`);
     }
 
     async updateWorkout(workout: Workout): Promise<void> {
         const userId = await requireAuthUserId();
-        const { error: workoutError } = await supabase
-            .from('workouts')
-            .upsert({
-                id: workout.id,
-                name: workout.name,
-                type: workout.type,
+        const { error } = await supabase.rpc('save_workout_atomically', {
+            p_workout: {
+                id: workout.id, name: workout.name, type: workout.type,
                 scheduled_at: workout.scheduledAt?.toISOString() ?? null,
                 created_at: workout.createdAt.toISOString(),
-                updated_at: new Date().toISOString(),
-                user_id: userId,
-            });
-
-        if (workoutError) {
-            throw new Error(`Failed to update workout: ${workoutError.message}`);
-        }
-
-        // Delete existing exercises and re-insert to keep in sync
-        const { error: deleteError } = await supabase
-            .from('exercises')
-            .delete()
-            .eq('workout_id', workout.id);
-
-        if (deleteError) {
-            throw new Error(`Failed to update exercises (delete step): ${deleteError.message}`);
-        }
-
-        if (workout.exercises.length > 0) {
-            const exerciseRows = workout.exercises.map((e, index) => ({
-                id: e.id,
-                workout_id: workout.id,
-                name: e.name,
-                order_index: e.orderIndex ?? index,
-                sets: e.sets,
-                reps_per_set: e.repsPerSet,
-                weight_kg: e.weightKg,
+                updated_at: new Date().toISOString(), user_id: userId,
+            },
+            p_exercises: workout.exercises.map((e, index) => ({
+                id: e.id, workout_id: workout.id, name: e.name,
+                order_index: e.orderIndex ?? index, sets: e.sets,
+                reps_per_set: e.repsPerSet, weight_kg: e.weightKg,
                 duration_seconds: e.durationSeconds,
                 rest_seconds_between_sets: e.restSecondsBetweenSets ?? null,
                 rest_seconds_before_next_exercise: e.restSecondsBeforeNextExercise ?? null,
                 notes: e.notes,
-                created_at: new Date().toISOString(),
-            }));
-
-            const { error: insertError } = await supabase.from('exercises').insert(exerciseRows);
-
-            if (insertError) {
-                throw new Error(`Failed to update exercises (insert step): ${insertError.message}`);
-            }
-        }
+            })),
+        });
+        if (error) throw new Error(`Failed to update workout: ${error.message}`);
     }
 
     async deleteWorkout(id: string): Promise<void> {
@@ -232,37 +208,20 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
 
     async saveWorkoutSession(session: WorkoutSession): Promise<void> {
         const userId = await requireAuthUserId();
-        // upsert: this is called repeatedly for the same session (start, each set, finish)
-        const { error: sessionError } = await supabase.from('workout_sessions').upsert({
-            id: session.id,
-            workout_id: session.workoutId,
-            started_at: session.startedAt.toISOString(),
-            finished_at: session.finishedAt?.toISOString() ?? null,
-            user_id: userId,
-        });
-
-        if (sessionError) {
-            throw new Error(`Failed to save workout session: ${sessionError.message}`);
-        }
-
-        if (session.sets.length > 0) {
-            const setRows = session.sets.map((s) => ({
-                id: s.id,
-                session_id: session.id,
-                exercise_id: s.exerciseId,
-                set_number: s.setNumber,
-                reps_completed: s.repsCompleted,
-                weight_used_kg: s.weightUsedKg,
-                completed_at: s.completedAt.toISOString(),
+        const { error } = await supabase.rpc('save_session_atomically', {
+            p_session: {
+                id: session.id, workout_id: session.workoutId,
+                started_at: session.startedAt.toISOString(),
+                finished_at: session.finishedAt?.toISOString() ?? null,
                 user_id: userId,
-            }));
-
-            const { error: setsError } = await supabase.from('completed_sets').upsert(setRows);
-
-            if (setsError) {
-                throw new Error(`Failed to save completed sets: ${setsError.message}`);
-            }
-        }
+            },
+            p_sets: session.sets.map((s) => ({
+                id: s.id, session_id: session.id, exercise_id: s.exerciseId,
+                set_number: s.setNumber, reps_completed: s.repsCompleted,
+                weight_used_kg: s.weightUsedKg, completed_at: s.completedAt.toISOString(),
+            })),
+        });
+        if (error) throw new Error(`Failed to save workout session: ${error.message}`);
     }
 
     async getWorkoutSessions(workoutId?: string): Promise<WorkoutSession[]> {

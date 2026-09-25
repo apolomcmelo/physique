@@ -6,7 +6,8 @@ const KEY = '@physique/exams';
 
 export class LocalExamRepository implements IExamRepository {
     async getExams(): Promise<Exam[]> {
-        return (await getItem<Exam[]>(KEY)) ?? [];
+        const exams = await getItem<Exam[]>(KEY);
+        return (exams ?? []).map((exam) => ({ ...exam, uploadedAt: new Date(exam.uploadedAt) }));
     }
 
     async saveExam(exam: Exam): Promise<void> {

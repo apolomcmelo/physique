@@ -21,6 +21,8 @@ import { parseCsvMealPlan } from '../../src/domain/use-cases/meal/ParseCsvMealPl
 import { parseCsvWorkouts } from '../../src/domain/use-cases/workout/ParseCsvWorkouts';
 import { WorkoutDetailModal } from '../../src/ui/components/WorkoutDetailModal';
 import { router } from 'expo-router';
+import { savePlanImport } from '../../src/adapters/supabase/SavePlanImport';
+import { saveLocalPlanImport } from '../../src/adapters/local/SavePlanImport';
 
 interface TimelineItem {
     id: string;
@@ -160,11 +162,11 @@ export default function PlanScreen() {
             }
 
             const parsed = parseCsvMealPlan(csvContent);
-            await mealRepo.saveMealPlanEntries(parsed);
-
             const workouts = parseCsvWorkouts(csvContent);
-            for (const workout of workouts) {
-                await workoutRepo.saveWorkout(workout);
+            if (process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true') {
+                await saveLocalPlanImport(parsed, workouts, csvContent);
+            } else {
+                await savePlanImport(parsed, workouts, csvContent);
             }
 
             await loadEntries();

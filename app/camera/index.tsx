@@ -22,6 +22,7 @@ import { BodyPhotoAngle, createBodyPhoto } from '../../src/domain/entities/BodyP
 import { arePhotosConsistent } from '../../src/domain/use-cases/photo/ArePhotosConsistent';
 import { supabase } from '../../src/infrastructure/supabase/client';
 import { readFileAsArrayBuffer } from '../../src/infrastructure/supabase/readFileAsArrayBuffer';
+import { getPrivateFileUrl } from '../../src/infrastructure/supabase/privateFiles';
 import { isCameraSupported } from './support';
 
 const ANGLES: { key: BodyPhotoAngle; label: string }[] = [
@@ -92,7 +93,9 @@ export default function CameraScreen() {
     async function loadPreviousPhoto(angle: BodyPhotoAngle) {
         try {
             const photo = await photoRepo.getLatestPhotoByAngle(angle);
-            setPreviousPhotoUrl(photo?.fileUrl ?? null);
+            setPreviousPhotoUrl(photo ? (process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true'
+                ? photo.fileUrl
+                : await getPrivateFileUrl('photos', photo.fileUrl, photo.userId)) : null);
         } catch {
             setPreviousPhotoUrl(null);
         }
@@ -173,8 +176,7 @@ export default function CameraScreen() {
 
                 if (uploadError) throw new Error(uploadError.message);
 
-                const { data: publicData } = supabase.storage.from('photos').getPublicUrl(storagePath);
-                fileUrl = publicData.publicUrl;
+                fileUrl = storagePath;
             }
 
             // Check consistency with previous photo
@@ -201,7 +203,9 @@ export default function CameraScreen() {
                 setConsistencyResult(result);
             }
 
-            setPreviousPhotoUrl(fileUrl);
+            setPreviousPhotoUrl(process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true'
+                ? fileUrl
+                : await getPrivateFileUrl('photos', fileUrl, currentUserId));
         } catch (e) {
             console.warn('Camera capture failed', e);
             setError('Erro ao capturar foto');

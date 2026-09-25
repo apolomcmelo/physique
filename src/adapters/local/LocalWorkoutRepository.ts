@@ -1,7 +1,8 @@
 import { Workout } from '../../domain/entities/Workout';
 import { WorkoutSession, CompletedSet } from '../../domain/entities/WorkoutSession';
 import { IWorkoutRepository } from '../../domain/ports/WorkoutRepository';
-import { getItem, setItem } from './LocalStorage';
+import { getItem, setItem, setItemForAccount } from './LocalStorage';
+import { getLocalPlan, PLAN_KEY, withLocalPlanWrite } from './SavePlanImport';
 
 const WORKOUTS_KEY = '@physique/workouts';
 const SESSIONS_KEY = '@physique/workout_sessions';
@@ -37,7 +38,8 @@ function parseSession(raw: WorkoutSession): WorkoutSession {
 
 export class LocalWorkoutRepository implements IWorkoutRepository {
     async getWorkouts(): Promise<Workout[]> {
-        const raw = await getItem<Workout[]>(WORKOUTS_KEY);
+        const plan = await getLocalPlan();
+        const raw = plan ? plan.workouts : await getItem<Workout[]>(WORKOUTS_KEY);
         return (raw ?? []).map(parseWorkout);
     }
 
@@ -47,12 +49,35 @@ export class LocalWorkoutRepository implements IWorkoutRepository {
     }
 
     async saveWorkout(workout: Workout): Promise<void> {
+        const plan = await getLocalPlan();
+        if (plan) {
+            await withLocalPlanWrite(async (accountId) => {
+                const current = await getLocalPlan();
+                if (!current || current.workouts.some((existing) => existing.id === workout.id)) return;
+                await setItemForAccount(PLAN_KEY, { ...current, workouts: [...current.workouts, workout] }, accountId);
+            });
+            return;
+        }
         const workouts = await getItem<Workout[]>(WORKOUTS_KEY) ?? [];
-        workouts.push(workout);
-        await setItem(WORKOUTS_KEY, workouts);
+        if (workouts.some((existing) => existing.id === workout.id)) return;
+        const updated = [...workouts, workout];
+        await setItem(WORKOUTS_KEY, updated);
     }
 
     async updateWorkout(workout: Workout): Promise<void> {
+        const plan = await getLocalPlan();
+        if (plan) {
+            await withLocalPlanWrite(async (accountId) => {
+                const current = await getLocalPlan();
+                if (!current) return;
+                const workouts = [...current.workouts];
+                const index = workouts.findIndex((existing) => existing.id === workout.id);
+                if (index === -1) workouts.push(workout);
+                else workouts[index] = workout;
+                await setItemForAccount(PLAN_KEY, { ...current, workouts }, accountId);
+            });
+            return;
+        }
         const workouts = await getItem<Workout[]>(WORKOUTS_KEY) ?? [];
         const index = workouts.findIndex((w) => w.id === workout.id);
         if (index !== -1) {
@@ -64,6 +89,14 @@ export class LocalWorkoutRepository implements IWorkoutRepository {
     }
 
     async deleteWorkout(id: string): Promise<void> {
+        const plan = await getLocalPlan();
+        if (plan) {
+            await withLocalPlanWrite(async (accountId) => {
+                const current = await getLocalPlan();
+                if (current) await setItemForAccount(PLAN_KEY, { ...current, workouts: current.workouts.filter((w) => w.id !== id) }, accountId);
+            });
+            return;
+        }
         const workouts = await getItem<Workout[]>(WORKOUTS_KEY) ?? [];
         await setItem(WORKOUTS_KEY, workouts.filter((w) => w.id !== id));
     }
