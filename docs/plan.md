@@ -54,7 +54,7 @@ Não é necessário introduzir um servidor Node genérico para tudo. Operações
 
 Requisitos: BASE, HIS. Pré-requisito dos incrementos com persistência.
 
-- [ ] Estabelecer instalação reproduzível/toolchain e executar o gate; corrigir `setupFilesAfterFramework` em `package.json` para a opção correta de Jest e registrar baseline real.
+- [ ] Estabelecer instalação reproduzível/toolchain e executar o gate; `setupFilesAfterEnv` corrigido em `package.json` e coberto por teste (25/09/2026). Com instalação sem lockfile, domínio: 16 suítes/115 testes passando; Jest completo: 34 suítes/169 testes passando. Gate ainda incompleto: `tsc` acusa ausência de declaração de `react-test-renderer` em teste existente; export web não resolve `query-string` do `expo-router`. Reprodutibilidade e exportação pendentes.
 - [ ] Verificar RLS de exercícios/filhos e acesso a arquivos entre duas contas; corrigir política permissiva e compatibilidade de links privados. Não inferir estado dos buckets implantados a partir do SQL.
 - [ ] Proteger histórico contra exclusão/edição de modelos; planejar snapshot/backfill antes de modificar IDs/relações. Revisar divergência de cascata local/Supabase.
 - [ ] Reproduzir falhas de `updateWorkout` após exclusão de exercícios e da importação entre refeições/treinos; estabelecer gravação atômica ou recuperação que mantenha a rotina anterior íntegra e evite duplicação por retry.

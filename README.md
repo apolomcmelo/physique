@@ -47,7 +47,7 @@ The September 2026 static review found final-set recording, prescribed-rest, CSV
 | `npm run migrate` | Apply numbered SQL migrations to the database in `SUPABASE_DB_URL`. |
 | `npm run build` | **Run migrations, then export web assets.** |
 
-The full Jest configuration currently contains `setupFilesAfterFramework` instead of `setupFilesAfterEnv`; fixing and establishing a passing baseline is planned. No lint script is declared. Commands above describe available checks, not verified passing results.
+The full Jest configuration uses `setupFilesAfterEnv`, and its native matcher setup has a regression test. With dependencies installed on 25/09/2026, the domain suite passed (115 tests) and full Jest suite passed (169 tests). TypeScript still reports a missing `react-test-renderer` declaration in `src/ui/hooks/__tests__/useAccelerometer.test.tsx`; web export is blocked by an unresolved `query-string` import from `expo-router`. These checks do not verify deployed services or browsers. No lint script is declared.
 
 `scripts/migrate.js` reads `.env.local`, tracks applied files in `schema_migrations`, and runs each numbered file from `src/infrastructure/supabase/migrations/` in its own transaction. A failure rolls back that file, not earlier migrations. Use an identified test database for migration verification; an existing schema without the runner's history may need reconciliation before running the initial migration.
 

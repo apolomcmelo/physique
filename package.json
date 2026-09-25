@@ -78,7 +78,7 @@
       "<rootDir>/node_modules/",
       "<rootDir>/src/domain/__tests__/setup.ts"
     ],
-    "setupFilesAfterFramework": [
+    "setupFilesAfterEnv": [
       "@testing-library/jest-native/extend-expect"
     ],
     "transformIgnorePatterns": [
