@@ -32,6 +32,11 @@ export default function HistoryScreen() {
     const [meals, setMeals] = useState<MealPlanEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [editingSet, setEditingSet] = useState<{ sessionId: string; setId: string } | null>(null);
+    const [editReps, setEditReps] = useState('');
+    const [editWeight, setEditWeight] = useState('');
+    const [editDuration, setEditDuration] = useState('');
+    const [editStartedAt, setEditStartedAt] = useState<Record<string, string>>({});
 
     // New weight form
     const [showWeightForm, setShowWeightForm] = useState(false);
@@ -97,6 +102,37 @@ export default function HistoryScreen() {
         if (!session.finishedAt) return 'Em andamento';
         const min = Math.round((session.finishedAt.getTime() - session.startedAt.getTime()) / 60000);
         return `${min} min`;
+    }
+
+    async function saveSetCorrection() {
+        if (!editingSet) return;
+        const reps = Number(editReps);
+        if (!Number.isInteger(reps) || reps < 0) { setError('Repetições inválidas'); return; }
+        const weight = editWeight.trim() ? Number(editWeight.replace(',', '.')) : null;
+        if (weight !== null && (!Number.isFinite(weight) || weight < 0)) { setError('Carga inválida'); return; }
+        const session = sessions.find((candidate) => candidate.id === editingSet.sessionId);
+        if (!session) return;
+        const original = session.sets.find((set) => set.id === editingSet.setId);
+        const duration = original?.durationSeconds == null ? null : Number(editDuration);
+        if (duration !== null && (!Number.isInteger(duration) || duration < 0)) { setError('Duração inválida'); return; }
+        const updated = { ...session, sets: session.sets.map((set) => set.id === editingSet.setId ? { ...set, repsCompleted: reps, weightUsedKg: weight, durationSeconds: duration } : set) };
+        try {
+            await workoutRepo.saveWorkoutSession(updated);
+            setSessions((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
+            setEditingSet(null);
+            setError(null);
+        } catch { setError('Erro ao corrigir série'); }
+    }
+
+    async function saveSessionDate(session: WorkoutSession) {
+        const date = new Date(editStartedAt[session.id] ?? session.startedAt.toISOString());
+        if (!Number.isFinite(date.getTime())) { setError('Data inválida'); return; }
+        const updated = { ...session, startedAt: date };
+        try {
+            await workoutRepo.saveWorkoutSession(updated);
+            setSessions((current) => current.map((candidate) => candidate.id === session.id ? updated : candidate));
+            setError(null);
+        } catch { setError('Erro ao corrigir data'); }
     }
 
     if (loading) {
@@ -236,7 +272,7 @@ export default function HistoryScreen() {
                                 <Card key={session.id} style={styles.historyCard}>
                                     <View style={styles.historyRow}>
                                         <TypographyText variant="h4" color={Colors.textPrimary}>
-                                            Sessão
+                                            {session.workoutName ?? 'Treino sem nome registrado'}
                                         </TypographyText>
                                         <TypographyText variant="bodySmall" color={Colors.textSecondary}>
                                             {formatDate(session.startedAt)}
@@ -245,11 +281,37 @@ export default function HistoryScreen() {
                                     <TypographyText variant="bodySmall" color={Colors.textSecondary}>
                                         {session.sets.length} séries • {sessionDuration(session)}
                                     </TypographyText>
-                                    {session.finishedAt && (
-                                        <TypographyText variant="bodySmall" color={Colors.success}>
-                                            Concluído
+                                    <TextInput accessibilityLabel={`Data da sessão ${session.id}`} value={editStartedAt[session.id] ?? session.startedAt.toISOString()} onChangeText={(value) => setEditStartedAt((current) => ({ ...current, [session.id]: value }))} />
+                                    <Button label={`Corrigir data ${session.id}`} onPress={() => saveSessionDate(session)} />
+                                    <TypographyText variant="bodySmall" color={Colors.success}>
+                                        {session.status === 'partial' ? 'Parcial' : session.finishedAt ? 'Concluído' : 'Em andamento'}
+                                    </TypographyText>
+                                    {session.sets.map((set) => (
+                                        <View key={set.id}>
+                                        <TypographyText key={set.id} variant="bodySmall" color={Colors.textSecondary}>
+                                            {set.exerciseName ?? 'Exercício sem nome'} • série {set.setNumber}
+                                            {set.durationSeconds == null ? ` • ${set.repsCompleted} reps` : ''}
+                                            {set.prescribedReps != null ? ` (previsto ${set.prescribedReps})` : ''}
+                                            {set.weightUsedKg != null ? ` • ${set.weightUsedKg.toLocaleString('pt-BR')} kg` : ''}
+                                            {set.durationSeconds != null ? ` • ${set.durationSeconds}s` : ''}
+                                            {set.prescribedDurationSeconds != null ? ` (previsto ${set.prescribedDurationSeconds}s)` : ''}
                                         </TypographyText>
-                                    )}
+                                        <Button label={`Corrigir série ${set.setNumber}`} onPress={() => {
+                                            setEditingSet({ sessionId: session.id, setId: set.id });
+                                            setEditReps(String(set.repsCompleted));
+                                            setEditWeight(set.weightUsedKg == null ? '' : String(set.weightUsedKg));
+                                            setEditDuration(set.durationSeconds == null ? '' : String(set.durationSeconds));
+                                        }} />
+                                        {editingSet?.setId === set.id && (
+                                            <View>
+                                                <TextInput accessibilityLabel="Repetições corrigidas" value={editReps} onChangeText={setEditReps} keyboardType="number-pad" />
+                                                <TextInput accessibilityLabel="Carga corrigida em kg" value={editWeight} onChangeText={setEditWeight} keyboardType="decimal-pad" />
+                                                {set.durationSeconds != null && <TextInput accessibilityLabel="Duração corrigida em segundos" value={editDuration} onChangeText={setEditDuration} keyboardType="number-pad" />}
+                                                <Button label="Salvar correção" onPress={saveSetCorrection} />
+                                            </View>
+                                        )}
+                                        </View>
+                                    ))}
                                 </Card>
                             ))
                         )}

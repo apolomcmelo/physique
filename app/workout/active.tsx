@@ -1,27 +1,33 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     StyleSheet,
     Text,
     TouchableOpacity,
+    TextInput,
+    Alert,
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Exercise, Workout } from '../../src/domain/entities/Workout';
 import { WorkoutSession } from '../../src/domain/entities/WorkoutSession';
 import { completeSet } from '../../src/domain/use-cases/workout/CompleteSet';
 import { finishWorkoutSession } from '../../src/domain/use-cases/workout/FinishWorkoutSession';
 import { startWorkoutSession } from '../../src/domain/use-cases/workout/StartWorkoutSession';
+import { nextRest } from '../../src/domain/use-cases/workout/WorkoutRest';
+import { savePartialWorkoutSession } from '../../src/domain/use-cases/workout/SavePartialWorkoutSession';
+import { resumedTimedSet } from '../../src/domain/use-cases/workout/WorkoutTimerState';
 import { Button } from '../../src/ui/components/Button';
 import { Typography as TypographyText } from '../../src/ui/components/Typography';
 import { WorkoutTimer } from '../../src/ui/components/WorkoutTimer';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Radius, Spacing, Typography } from '../../src/ui/theme';
 
-const DEFAULT_REST_DURATION = 90;
+const DEFAULT_REST_DURATION = 60;
 const REST_DURATION_STEP = 15;
-const MIN_REST_DURATION = 15;
+const MIN_REST_DURATION = 0;
 const MAX_REST_DURATION = 300;
 
 export default function ActiveWorkoutScreen() {
@@ -33,10 +39,17 @@ export default function ActiveWorkoutScreen() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [finishing, setFinishing] = useState(false);
+    const savingSetRef = useRef(false);
+    const finishingRef = useRef(false);
 
     // Progress tracking
     const [exerciseIndex, setExerciseIndex] = useState(0);
     const [setIndex, setSetIndex] = useState(0); // 0-based current set
+    const [finalSetRecorded, setFinalSetRecorded] = useState(false);
+    const [setsRecorded, setSetsRecorded] = useState(0);
+    const [actualReps, setActualReps] = useState('');
+    const [actualWeight, setActualWeight] = useState('');
+    const [actualDuration, setActualDuration] = useState('');
 
     // Rest timer
     const [resting, setResting] = useState(false);
@@ -44,6 +57,14 @@ export default function ActiveWorkoutScreen() {
 
     // Working-set timer (time-based exercises)
     const [setTimerRunning, setSetTimerRunning] = useState(false);
+    const [setSaving, setSetSaving] = useState(false);
+    const setStartedAtRef = useRef<number | null>(null);
+    const [setDeadline, setSetDeadline] = useState<number | null>(null);
+    const [restDeadline, setRestDeadline] = useState<number | null>(null);
+    const [restExpired, setRestExpired] = useState(false);
+    const restStartRef = useRef<number | null>(null);
+    const [showExitActions, setShowExitActions] = useState(false);
+    const [resumableSession, setResumableSession] = useState<WorkoutSession | null>(null);
 
     useEffect(() => {
         if (!id) {
@@ -54,6 +75,17 @@ export default function ActiveWorkoutScreen() {
         initWorkout(id);
     }, [id]);
 
+    useEffect(() => {
+        if (!session) return;
+        let enabled = false;
+        let mounted = true;
+        void activateKeepAwakeAsync('active-workout').then(() => {
+            enabled = true;
+            if (!mounted) deactivateKeepAwake('active-workout');
+        }).catch(() => {});
+        return () => { mounted = false; if (enabled) deactivateKeepAwake('active-workout'); };
+    }, [session?.id]);
+
     async function initWorkout(workoutId: string) {
         try {
             setLoading(true);
@@ -63,6 +95,8 @@ export default function ActiveWorkoutScreen() {
                 return;
             }
             setWorkout(w);
+            const existing = (await workoutRepo.getWorkoutSessions(workoutId)).find((candidate) => !candidate.finishedAt);
+            if (existing) { setResumableSession(existing); return; }
             const s = await startWorkoutSession(workoutRepo, workoutId);
             setSession(s);
         } catch {
@@ -79,34 +113,93 @@ export default function ActiveWorkoutScreen() {
 
     const isLastSet = setIndex >= totalSets - 1;
     const isLastExercise = workout ? exerciseIndex >= workout.exercises.length - 1 : false;
-    const isWorkoutComplete = isLastExercise && isLastSet;
+    const isWorkoutComplete = isLastExercise && isLastSet && finalSetRecorded;
+    const previousSet = session?.sets.find((set) => set.exerciseId === currentExercise?.id && set.setNumber === currentSetNumber - 1);
+
+    function resumeSession(existing: WorkoutSession) {
+        if (!workout) return;
+        const nextExerciseIndex = workout.exercises.findIndex((exercise) =>
+            existing.sets.filter((set) => set.exerciseId === exercise.id).length < (exercise.sets ?? 1));
+        if (nextExerciseIndex === -1) {
+            setExerciseIndex(workout.exercises.length - 1);
+            setSetIndex((workout.exercises[workout.exercises.length - 1].sets ?? 1) - 1);
+            setFinalSetRecorded(true);
+        } else {
+            setExerciseIndex(nextExerciseIndex);
+            setSetIndex(existing.sets.filter((set) => set.exerciseId === workout.exercises[nextExerciseIndex].id).length);
+        }
+        setSession(existing);
+        setSetsRecorded(existing.sets.length);
+        setResumableSession(null);
+    }
+
+    useEffect(() => {
+        setActualReps(String(previousSet?.repsCompleted ?? currentExercise?.repsPerSet ?? 0));
+        setActualWeight(previousSet?.weightUsedKg != null ? String(previousSet.weightUsedKg) : currentExercise?.weightKg == null ? '' : String(currentExercise.weightKg));
+        if (currentExercise) setRestDuration(nextRest(currentExercise, setIndex + 1, isLastExercise) ?? 0);
+    }, [currentExercise?.id, setIndex]);
 
     function adjustRestDuration(change: number) {
-        setRestDuration((currentDuration) =>
-            Math.min(MAX_REST_DURATION, Math.max(MIN_REST_DURATION, currentDuration + change)),
-        );
+        const duration = Math.min(MAX_REST_DURATION, Math.max(MIN_REST_DURATION, restDuration + change));
+        setRestDuration(duration);
+        if (resting) {
+            setRestDeadline(Date.now() + duration * 1000);
+            setRestExpired(duration === 0);
+        }
     }
 
     async function handleCompleteSet() {
-        if (!session || !currentExercise) return;
+        if (!session || !currentExercise || savingSetRef.current || finishingRef.current || finalSetRecorded) return;
+        savingSetRef.current = true;
+        setSetSaving(true);
         try {
             const updated = await completeSet(
                 workoutRepo,
                 session,
-                currentExercise.id,
-                currentExercise.repsPerSet ?? 0,
-                currentExercise.weightKg,
+                currentExercise,
+                currentSetNumber,
+                { repsCompleted: Number(actualReps), weightUsedKg: actualWeight.trim() ? Number(actualWeight.replace(',', '.')) : null,
+                    durationSeconds: setDuration === null ? null : setStartedAtRef.current === null ? null
+                        : Math.min(setDuration, Math.max(0, Math.round((Date.now() - setStartedAtRef.current) / 1000))) },
             );
             setSession(updated);
+            setError(null);
+            setSetsRecorded(updated.sets.length);
+            setActualDuration(String(updated.sets[updated.sets.length - 1].durationSeconds ?? 0));
             setSetTimerRunning(false);
-            setResting(true);
+            if (isLastExercise && isLastSet) setFinalSetRecorded(true);
+            else if (restDuration === 0) handleRestComplete();
+            else {
+                const completedAt = updated.sets[updated.sets.length - 1].completedAt.getTime();
+                const restStartsAt = setDuration !== null && setStartedAtRef.current !== null
+                    ? Math.min(completedAt, setStartedAtRef.current + setDuration * 1000)
+                    : completedAt;
+                restStartRef.current = restStartsAt;
+                setRestDeadline(setDuration !== null && setStartedAtRef.current !== null && completedAt >= setStartedAtRef.current + setDuration * 1000
+                    ? resumedTimedSet(setStartedAtRef.current, setDuration, restDuration, Date.now()).restDeadline
+                    : restStartsAt + restDuration * 1000);
+                setResting(true);
+                setRestExpired(restStartsAt + restDuration * 1000 <= Date.now());
+            }
+            setStartedAtRef.current = null;
         } catch {
             setError('Erro ao registrar série');
+        } finally {
+            savingSetRef.current = false;
+            setSetSaving(false);
         }
     }
 
+    async function handleTimedSetExpired() {
+        await handleCompleteSet();
+    }
+
     function handleRestComplete() {
+        setRestExpired(true);
         setResting(false);
+        setRestDeadline(null);
+        restStartRef.current = null;
+        setError(null);
         if (isLastSet) {
             if (!isLastExercise) {
                 setExerciseIndex((prev) => prev + 1);
@@ -120,16 +213,63 @@ export default function ActiveWorkoutScreen() {
     }
 
     async function handleFinishWorkout() {
-        if (!session) return;
+        if (!session || !workout || finishingRef.current || savingSetRef.current || !isWorkoutComplete) return;
+        finishingRef.current = true;
         try {
             setFinishing(true);
-            await finishWorkoutSession(workoutRepo, session);
+            await finishWorkoutSession(workoutRepo, session, workout);
             router.replace('/(tabs)/workout');
         } catch {
             setError('Erro ao finalizar treino');
         } finally {
+            finishingRef.current = false;
             setFinishing(false);
         }
+    }
+
+    async function handleSavePartial() {
+        if (!session || savingSetRef.current || finishingRef.current) return;
+        finishingRef.current = true;
+        try {
+            setFinishing(true);
+            await savePartialWorkoutSession(workoutRepo, session);
+            router.replace('/(tabs)/workout');
+        } catch {
+            setError('Erro ao salvar sessão parcial');
+        } finally {
+            finishingRef.current = false;
+            setFinishing(false);
+        }
+    }
+
+    async function handleCorrectSet() {
+        if (!session || !currentExercise || savingSetRef.current) return;
+        const recorded = session.sets.find((set) => set.exerciseId === currentExercise.id && set.setNumber === currentSetNumber);
+        if (!recorded) return;
+        const duration = Number(actualDuration);
+        if (!Number.isInteger(duration) || duration < 0) { setError('Duração inválida'); return; }
+        savingSetRef.current = true;
+        try {
+            const corrected = { ...session, sets: session.sets.map((set) => set.id === recorded.id ? { ...set, durationSeconds: duration } : set) };
+            await workoutRepo.saveWorkoutSession(corrected);
+            setSession(corrected);
+            setError(null);
+        } catch { setError('Erro ao corrigir série'); }
+        finally { savingSetRef.current = false; }
+    }
+
+    function handleDiscard() {
+        if (!session || savingSetRef.current || finishingRef.current) return;
+        const sessionToDiscard = session;
+        Alert.alert('Descartar treino?', 'As séries registradas nesta sessão serão apagadas.', [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Descartar', style: 'destructive', onPress: async () => {
+                try {
+                    await workoutRepo.deleteWorkoutSession(sessionToDiscard.id);
+                    router.replace('/(tabs)/workout');
+                } catch { setError('Erro ao descartar treino'); }
+            } },
+        ]);
     }
 
     if (loading) {
@@ -140,7 +280,7 @@ export default function ActiveWorkoutScreen() {
         );
     }
 
-    if (error || !workout) {
+    if (!workout) {
         return (
             <SafeAreaView style={styles.safe}>
                 <View style={styles.centered}>
@@ -153,11 +293,18 @@ export default function ActiveWorkoutScreen() {
         );
     }
 
+    if (resumableSession) {
+        return <SafeAreaView style={styles.safe}><View style={styles.centered}>
+            <TypographyText variant="h3" color={Colors.textPrimary}>Sessão em andamento</TypographyText>
+            <Button label="Retomar treino" onPress={() => resumeSession(resumableSession)} />
+        </View></SafeAreaView>;
+    }
+
     return (
         <SafeAreaView style={styles.safe}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => setShowExitActions((shown) => !shown)} style={styles.backBtn}>
                     <Text style={[Typography.h4, { color: Colors.textSecondary }]}>← Voltar</Text>
                 </TouchableOpacity>
                 <TypographyText variant="h3" color={Colors.textPrimary}>
@@ -179,6 +326,9 @@ export default function ActiveWorkoutScreen() {
                     />
                 ))}
             </View>
+            <TypographyText variant="bodySmall" color={Colors.textSecondary} style={{ textAlign: 'center' }}>
+                {setsRecorded} séries registradas
+            </TypographyText>
 
             {/* Main Content */}
             <View style={styles.body}>
@@ -189,6 +339,9 @@ export default function ActiveWorkoutScreen() {
                         </TypographyText>
                         <TypographyText variant="h1" color={Colors.textPrimary} style={styles.exerciseName}>
                             {currentExercise.name}
+                        </TypographyText>
+                        <TypographyText variant="bodySmall" color={Colors.textSecondary}>
+                            Próximo: {workout.exercises[exerciseIndex + 1]?.name ?? 'Finalização'}
                         </TypographyText>
 
                         <View style={styles.setInfo}>
@@ -203,14 +356,12 @@ export default function ActiveWorkoutScreen() {
                         </View>
 
                         <View style={styles.statsRow}>
-                            {currentExercise.repsPerSet && (
+                            {currentExercise.durationSeconds == null && (
                                 <View style={styles.statBox}>
                                     <TypographyText variant="label" color={Colors.textDisabled}>
-                                        REPS
+                                        REPS (previsto: {currentExercise.repsPerSet ?? 0})
                                     </TypographyText>
-                                    <TypographyText variant="h2" color={Colors.textPrimary}>
-                                        {currentExercise.repsPerSet}
-                                    </TypographyText>
+                                    <TextInput accessibilityLabel="Repetições realizadas" value={actualReps} onChangeText={setActualReps} keyboardType="number-pad" style={{ color: Colors.textPrimary, fontSize: 22 }} />
                                 </View>
                             )}
                             {setDuration && (
@@ -225,19 +376,24 @@ export default function ActiveWorkoutScreen() {
                                     </TypographyText>
                                 </View>
                             )}
-                            {currentExercise.weightKg && (
+                            {currentExercise.durationSeconds == null && (
                                 <View style={styles.statBox}>
                                     <TypographyText variant="label" color={Colors.textDisabled}>
-                                        PESO
+                                        PESO (previsto: {currentExercise.weightKg ?? 0} kg)
                                     </TypographyText>
-                                    <TypographyText variant="h2" color={Colors.textPrimary}>
-                                        {currentExercise.weightKg} kg
-                                    </TypographyText>
+                                    <TextInput accessibilityLabel="Carga realizada em kg" value={actualWeight} onChangeText={setActualWeight} keyboardType="decimal-pad" style={{ color: Colors.textPrimary, fontSize: 22 }} />
                                 </View>
                             )}
                         </View>
 
-                        {!resting && !setTimerRunning && !isWorkoutComplete && (
+                        {isWorkoutComplete && setDuration !== null && (
+                            <View>
+                                <TextInput accessibilityLabel="Duração realizada em segundos" value={actualDuration} onChangeText={setActualDuration} keyboardType="number-pad" style={{ color: Colors.textPrimary, fontSize: 20 }} />
+                                <Button label="Corrigir série" onPress={handleCorrectSet} />
+                            </View>
+                        )}
+
+                        {!setTimerRunning && !isWorkoutComplete && (
                             <View style={styles.restControls}>
                                 <TouchableOpacity
                                     accessibilityLabel="Diminuir descanso em 15 segundos"
@@ -278,7 +434,8 @@ export default function ActiveWorkoutScreen() {
                         <WorkoutTimer
                             key={`${currentExercise.id}-${setIndex}`}
                             durationSeconds={setDuration}
-                            onComplete={handleCompleteSet}
+                            deadline={setDeadline ?? undefined}
+                            onComplete={handleTimedSetExpired}
                             autoStart
                         />
                     </View>
@@ -290,20 +447,32 @@ export default function ActiveWorkoutScreen() {
                         <TypographyText variant="label" color={Colors.textSecondary} style={{ marginBottom: Spacing.sm }}>
                             DESCANSO
                         </TypographyText>
-                        <WorkoutTimer
+                        {!restExpired && <WorkoutTimer
                             durationSeconds={restDuration}
-                            onComplete={handleRestComplete}
+                            deadline={restDeadline ?? undefined}
+                            onComplete={() => setRestExpired(true)}
                             autoStart
-                        />
-                        <TouchableOpacity onPress={handleRestComplete} style={styles.skipBtn}>
-                            <Text style={[Typography.label, { color: Colors.textSecondary }]}>PULAR DESCANSO</Text>
-                        </TouchableOpacity>
+                        />}
+                        {restExpired ? <Button label="Continuar após descanso" onPress={handleRestComplete} />
+                            : <TouchableOpacity onPress={handleRestComplete} accessibilityLabel="Pular descanso" style={styles.skipBtn}>
+                                <Text style={[Typography.label, { color: Colors.textSecondary }]}>PULAR DESCANSO</Text>
+                            </TouchableOpacity>}
                     </View>
                 )}
             </View>
 
             {/* Action Buttons */}
             <View style={styles.footer}>
+                {showExitActions && (
+                    <View>
+                        <Button label="Retomar" onPress={() => setShowExitActions(false)} />
+                        <Button label="Salvar parcial" onPress={handleSavePartial} loading={finishing} />
+                        <Button label="Descartar" onPress={handleDiscard} />
+                    </View>
+                )}
+                {!showExitActions && session && !isWorkoutComplete && (
+                    <Button label="Salvar parcial" onPress={handleSavePartial} loading={finishing} />
+                )}
                 {error && (
                     <TypographyText variant="bodySmall" color={Colors.error} style={{ marginBottom: Spacing.sm }}>
                         {error}
@@ -311,13 +480,13 @@ export default function ActiveWorkoutScreen() {
                 )}
 
                 {!resting && !isWorkoutComplete && !setTimerRunning && setDuration && (
-                    <TouchableOpacity style={styles.mainBtn} onPress={() => setSetTimerRunning(true)}>
+                    <TouchableOpacity style={styles.mainBtn} onPress={() => { setStartedAtRef.current = Date.now(); setSetDeadline(Date.now() + setDuration * 1000); setSetTimerRunning(true); }}>
                         <Text style={[Typography.h3, { color: Colors.white }]}>▶ Iniciar Série</Text>
                     </TouchableOpacity>
                 )}
 
                 {!resting && !isWorkoutComplete && (setTimerRunning || !setDuration) && (
-                    <TouchableOpacity style={styles.mainBtn} onPress={handleCompleteSet}>
+                    <TouchableOpacity style={styles.mainBtn} onPress={handleCompleteSet} disabled={setSaving}>
                         <Text style={[Typography.h3, { color: Colors.white }]}>✓ Terminei a Série</Text>
                     </TouchableOpacity>
                 )}

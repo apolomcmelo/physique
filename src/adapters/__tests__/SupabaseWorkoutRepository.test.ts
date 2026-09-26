@@ -257,4 +257,17 @@ describe('SupabaseWorkoutRepository', () => {
             );
         });
     });
+
+    it('persists actual timed duration and partial status in the atomic session request', async () => {
+        await repo.saveWorkoutSession({
+            id: 's1', workoutId: 'w1', startedAt: new Date('2026-09-25T10:00:00Z'),
+            finishedAt: new Date('2026-09-25T10:15:00Z'), status: 'partial',
+            sets: [{ id: 'set1', exerciseId: 'ex1', setNumber: 1, repsCompleted: 0,
+                weightUsedKg: null, durationSeconds: 841, completedAt: new Date('2026-09-25T10:14:01Z') }],
+        });
+        expect(mockRpc).toHaveBeenCalledWith('save_session_atomically', expect.objectContaining({
+            p_session: expect.objectContaining({ status: 'partial' }),
+            p_sets: [expect.objectContaining({ duration_seconds: 841 })],
+        }));
+    });
 });

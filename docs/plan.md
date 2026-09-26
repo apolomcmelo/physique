@@ -66,11 +66,13 @@ Aceite: usuário B não acessa registros/arquivos de A; remover um modelo não e
 
 Requisitos: TRE; detalhamento no plano de treinos.
 
-- [ ] Última série precisa ser registrada antes da conclusão, inclusive um exercício/uma série.
-- [ ] Intervalos prescritos usados com default 60 s, herança de transição, zero explícito e ausência de transição final.
-- [ ] Valores realmente executados editáveis; HIT como um exercício/uma série com duração definida e tempo realizado.
-- [ ] Cronômetros por tempo decorrido e retorno do segundo plano, sem séries/sons fictícios.
-- [ ] Sessão parcial e descarte explícito; histórico com nomes, prescrições, cargas e durações, sem depender do modelo atual.
+- [x] Última série registrada e persistida antes de oferecer conclusão, inclusive exercício único/série única; testes de tela e domínio cobrem falha e repetição rápida.
+- [x] Intervalos prescritos conectados com default 60 s, herança de transição, zero explícito, edição local e ausência de transição final; testes de regra e tela.
+- [x] Repetições/carga reais editáveis; HIT cronometrado registra segundos realizados sem carga/repetições fictícias, com correção antes de finalizar. Migração aditiva `012_p1_actual_workout.sql` e verificação em PostgreSQL descartável.
+- [x] Cronômetros por prazo/tempo decorrido; callbacks atrasados não estendem cronômetro nem iniciam série posterior, avisos sonoros próximos ao fim são best-effort. Tela ativa solicita manter acordada quando suportado; testes com relógio falso verificam retorno do segundo plano e nenhuma série fictícia.
+- [x] Retomar sessão ainda aberta, salvar parcial e descarte confirmado; histórico mostra snapshots de nomes, prescrição e valores reais mesmo após excluir modelo. Testes de tela, adapters e PostgreSQL descartável cobrem finalização, correções e exclusão explícita.
+
+Verificação P1 local: `npm run test:domain -- --runInBand` (19 suítes/128 testes), `npm test -- --runInBand --silent` (47 suítes/243 testes), `npx tsc --noEmit` e `npx expo export --platform web` (24 rotas) passaram; `scripts/p1-db-check.js` passou no PostgreSQL 16.8 descartável. Browser matrix, Wake Lock/áudio em dispositivo real e Supabase implantado continuam sem verificação externa. Recuperação offline após refresh/reabertura é P3; importação estrita de HIT por CSV é P2.
 
 Aceite: teste do fluxo completo, não somente factories; session history contém a última série exatamente uma vez; 20/25/30 min de HIT não viram repetições; atraso de callback não estende artificialmente o cronômetro.
 

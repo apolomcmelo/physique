@@ -29,6 +29,8 @@ function parseSession(raw: WorkoutSession): WorkoutSession {
         ...raw,
         startedAt: new Date(raw.startedAt),
         finishedAt: raw.finishedAt ? new Date(raw.finishedAt) : null,
+        status: raw.status ?? (raw.finishedAt ? 'complete' : 'active'),
+        workoutScheduledAt: raw.workoutScheduledAt ? new Date(raw.workoutScheduledAt) : null,
         sets: raw.sets.map((s: CompletedSet) => ({
             ...s,
             completedAt: new Date(s.completedAt),
@@ -119,5 +121,10 @@ export class LocalWorkoutRepository implements IWorkoutRepository {
             return sessions.filter((s) => s.workoutId === workoutId);
         }
         return sessions;
+    }
+
+    async deleteWorkoutSession(id: string): Promise<void> {
+        const sessions = await getItem<WorkoutSession[]>(SESSIONS_KEY) ?? [];
+        await setItem(SESSIONS_KEY, sessions.filter((session) => session.id !== id));
     }
 }

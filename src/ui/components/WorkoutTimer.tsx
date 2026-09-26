@@ -7,15 +7,20 @@ interface WorkoutTimerProps {
     durationSeconds: number;
     onComplete: () => void;
     autoStart?: boolean;
+    deadline?: number;
 }
 
 export const WorkoutTimer = ({
     durationSeconds,
     onComplete,
     autoStart = false,
+    deadline,
 }: WorkoutTimerProps) => {
     const [remaining, setRemaining] = useState(durationSeconds);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const deadlineRef = useRef<number | null>(null);
+    const lastCueRef = useRef<number | null>(null);
+    const completedRef = useRef(false);
     const onCompleteRef = useRef(onComplete);
     onCompleteRef.current = onComplete;
 
@@ -24,10 +29,30 @@ export const WorkoutTimer = ({
     }, [durationSeconds]);
 
     useEffect(() => {
-        if (!autoStart) return;
+        if (!autoStart || deadline === undefined) return;
+        setRemaining(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    }, [deadline, autoStart]);
 
+    useEffect(() => {
+        if (!autoStart) return;
+        deadlineRef.current = deadline ?? Date.now() + durationSeconds * 1000;
+        completedRef.current = false;
+        lastCueRef.current = null;
+        setRemaining(Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000)));
         intervalRef.current = setInterval(() => {
-            setRemaining((prev) => Math.max(0, prev - 1));
+            const elapsed = Date.now() - ((deadlineRef.current ?? Date.now()) - durationSeconds * 1000);
+            const next = Math.max(0, Math.ceil(((deadlineRef.current ?? Date.now()) - Date.now()) / 1000));
+            setRemaining(next);
+            if (next <= 5 && next >= 1 && next !== lastCueRef.current && Math.abs((deadlineRef.current ?? 0) - Date.now() - next * 1000) < 1500) {
+                lastCueRef.current = next;
+                void playTimerCue(next);
+            }
+            if (next === 0 && !completedRef.current) {
+                completedRef.current = true;
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                if (elapsed <= durationSeconds * 1000 + 1500) void playTimerCue(0);
+                onCompleteRef.current();
+            }
         }, 1000);
 
         return () => {
@@ -35,19 +60,7 @@ export const WorkoutTimer = ({
                 clearInterval(intervalRef.current);
             }
         };
-    }, [autoStart, durationSeconds]);
-
-    useEffect(() => {
-        if (!autoStart) return;
-        void playTimerCue(remaining);
-        if (remaining !== 0) return;
-
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
-        onCompleteRef.current();
-    }, [autoStart, remaining]);
+    }, [autoStart, durationSeconds, deadline]);
 
     const minutes = Math.floor(remaining / 60);
     const seconds = remaining % 60;

@@ -37,6 +37,8 @@ The September 2026 static review found final-set recording, prescribed-rest, CSV
 
 The local CSV import stores meals, workouts and its retry identifier in one account-scoped browser-storage record; a failed storage write leaves the previous record readable, and repeating the same CSV does not append duplicates. Browser storage can still be evicted or cleared. This does not implement recurring active/pending plan versions, which belong to the later CSV/routine phase.
 
+Workout execution now records the last set before Finish, accepts performed reps/load or timed-set seconds, uses prescribed rests with a 60-second fallback, and offers Resume, Save partial and confirmed Discard. Its countdown uses deadlines so delayed browser callbacks do not extend a timer or start extra sets. Session history uses recorded snapshots and can survive later workout-model deletion. Wake lock and final-second audio are best-effort browser capabilities; offline refresh/reopen recovery is separate P3 work. Schema migration `012_p1_actual_workout.sql` adds actual timed seconds and explicit partial status; only a disposable local PostgreSQL rehearsal has been run, not a deployed migration.
+
 ### Checks and deployment commands
 
 | Command | Current behavior |

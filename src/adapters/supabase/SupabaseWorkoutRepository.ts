@@ -41,6 +41,7 @@ interface WorkoutSessionRow {
     workout_name?: string | null;
     workout_type?: string | null;
     workout_scheduled_at?: string | null;
+    status?: 'active' | 'complete' | 'partial';
 }
 
 interface CompletedSetRow {
@@ -60,6 +61,7 @@ interface CompletedSetRow {
     exercise_order_index?: number | null;
     prescribed_rest_between_sets?: number | null;
     prescribed_rest_before_next_exercise?: number | null;
+    duration_seconds?: number | null;
 }
 
 // ── Mappers ──────────────────────────────────────────────────────────────────
@@ -99,6 +101,7 @@ function rowToCompletedSet(row: CompletedSetRow): CompletedSet {
         repsCompleted: row.reps_completed,
         weightUsedKg: row.weight_used_kg,
         completedAt: new Date(row.completed_at),
+        durationSeconds: row.duration_seconds ?? null,
         exerciseName: row.exercise_name ?? null,
         prescribedReps: row.prescribed_reps ?? null,
         prescribedWeightKg: row.prescribed_weight_kg ?? null,
@@ -121,6 +124,7 @@ function rowToWorkoutSession(row: WorkoutSessionRow): WorkoutSession {
         workoutName: row.workout_name ?? null,
         workoutType: row.workout_type ?? null,
         workoutScheduledAt: row.workout_scheduled_at ? new Date(row.workout_scheduled_at) : null,
+        status: row.status ?? (row.finished_at ? 'complete' : 'active'),
     };
 }
 
@@ -213,12 +217,14 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
                 id: session.id, workout_id: session.workoutId,
                 started_at: session.startedAt.toISOString(),
                 finished_at: session.finishedAt?.toISOString() ?? null,
+                status: session.status ?? (session.finishedAt ? 'complete' : 'active'),
                 user_id: userId,
             },
             p_sets: session.sets.map((s) => ({
                 id: s.id, session_id: session.id, exercise_id: s.exerciseId,
                 set_number: s.setNumber, reps_completed: s.repsCompleted,
                 weight_used_kg: s.weightUsedKg, completed_at: s.completedAt.toISOString(),
+                duration_seconds: s.durationSeconds ?? null,
             })),
         });
         if (error) throw new Error(`Failed to save workout session: ${error.message}`);
@@ -241,5 +247,10 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
         }
 
         return (data as WorkoutSessionRow[]).map(rowToWorkoutSession);
+    }
+
+    async deleteWorkoutSession(id: string): Promise<void> {
+        const { error } = await supabase.from('workout_sessions').delete().eq('id', id);
+        if (error) throw new Error(`Failed to discard workout session: ${error.message}`);
     }
 }

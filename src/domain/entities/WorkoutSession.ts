@@ -7,6 +7,7 @@ export interface CompletedSet {
     repsCompleted: number;
     weightUsedKg: number | null;
     completedAt: Date;
+    durationSeconds?: number | null;
     exerciseName?: string | null;
     prescribedReps?: number | null;
     prescribedWeightKg?: number | null;
@@ -23,6 +24,7 @@ export interface WorkoutSession {
     workoutId: string;
     startedAt: Date;
     finishedAt: Date | null;
+    status?: 'active' | 'complete' | 'partial';
     sets: CompletedSet[];
     workoutName?: string | null;
     workoutType?: string | null;
@@ -42,6 +44,8 @@ export function createCompletedSet(params: CreateCompletedSetParams): CompletedS
     if (params.repsCompleted < 0) {
         throw new Error('Reps completed cannot be negative');
     }
+    if (!Number.isInteger(params.repsCompleted)) throw new Error('Reps completed must be an integer');
+    if (params.durationSeconds != null && (!Number.isFinite(params.durationSeconds) || params.durationSeconds < 0)) throw new Error('Duration must not be negative');
     return {
         ...params,
         id: generateId(),

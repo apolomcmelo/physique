@@ -8,5 +8,6 @@ export interface IWorkoutRepository {
     updateWorkout(workout: Workout): Promise<void>;
     deleteWorkout(id: string): Promise<void>;
     saveWorkoutSession(session: WorkoutSession): Promise<void>;
+    deleteWorkoutSession(id: string): Promise<void>;
     getWorkoutSessions(workoutId?: string): Promise<WorkoutSession[]>;
 }
