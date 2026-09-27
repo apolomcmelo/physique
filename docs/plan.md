@@ -89,6 +89,8 @@ Requisitos: ROT, CSV, LLM. Resolver O1–O3 antes das regras afetadas.
 
 Aceite: exemplos de terça/quarta/quinta e início passado/futuro no mesmo dia; mudança de semana; regras O1 resolvidas/testadas; importação malformada não altera dados; prompt e importador concordam em todos os exemplos; pending replacement exige confirmação.
 
+Progresso P2 sem decisões de produto: `ReadRoutineCsv.ts` lê CSV com aspas, ponto e vírgula, escapes e quebra de linha, cabeçalho exato e erros por linha; `ValidateRoutineCsv.ts` faz prévia pura de refeições e treinos e rejeita HIT não cronometrado. Regressões do parser existentes corrigem `1:20min`, carga seguida de descanso e descanso standalone anterior. `CsvPromptContract.ts` fornece regras comuns aos dois geradores. Testes do domínio (23 suítes/142 testes), Jest completo (51 suítes/258 testes), TypeScript e export web (24 rotas) passaram. **Não declarar P2 concluído:** O1–O3 ainda estão marcadas OPEN nos requisitos, bloqueando gramática integral, interpretação de atividade ambígua, calendário com fuso/DST, versões e edição; a tela ainda utiliza os parsers legados após validação estrutural e não apresenta prévia antes de gravar. Nenhuma migração/serviço implantado foi alterado.
+
 ### P3 — Recuperação offline limitada a treino
 
 Requisitos: OFF, HIS. Depende de P0/P1 e da identidade de ocorrência de P2; resolver O4.

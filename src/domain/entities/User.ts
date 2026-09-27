@@ -10,6 +10,7 @@ export interface User {
     bodyFatPercentage: number | null;
     proteinPercentage: number | null;
     objective: string;
+    timezone?: string;
     createdAt: Date;
     updatedAt: Date;
 }

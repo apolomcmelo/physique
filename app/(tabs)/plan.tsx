@@ -17,12 +17,14 @@ import { Typography as TypographyText } from '../../src/ui/components/Typography
 import { Colors, Spacing } from '../../src/ui/theme';
 import { MealPlanEntry } from '../../src/domain/entities/MealPlan';
 import { Workout, WorkoutType } from '../../src/domain/entities/Workout';
-import { parseCsvMealPlan } from '../../src/domain/use-cases/meal/ParseCsvMealPlan';
-import { parseCsvWorkouts } from '../../src/domain/use-cases/workout/ParseCsvWorkouts';
 import { WorkoutDetailModal } from '../../src/ui/components/WorkoutDetailModal';
+import { Button } from '../../src/ui/components/Button';
 import { router } from 'expo-router';
-import { savePlanImport } from '../../src/adapters/supabase/SavePlanImport';
-import { saveLocalPlanImport } from '../../src/adapters/local/SavePlanImport';
+import { readRoutineCsv } from '../../src/domain/use-cases/routine/ReadRoutineCsv';
+import { validateRoutineCsv, RoutinePreview } from '../../src/domain/use-cases/routine/ValidateRoutineCsv';
+import { proposeRoutine, RoutineProposal, RoutineState, visibleRoutine } from '../../src/domain/use-cases/routine/RoutineVersions';
+import { LocalRoutineRepository } from '../../src/adapters/local/LocalRoutineRepository';
+import { SupabaseRoutineRepository } from '../../src/adapters/supabase/SupabaseRoutineRepository';
 
 interface TimelineItem {
     id: string;
@@ -112,7 +114,7 @@ function buildTimeline(entries: MealPlanEntry[], workouts: Workout[]): TimelineI
 }
 
 export default function PlanScreen() {
-    const { mealRepo, workoutRepo } = useRepositories();
+    const { mealRepo, workoutRepo, userRepo } = useRepositories();
     const [entries, setEntries] = useState<MealPlanEntry[]>([]);
     const [workouts, setWorkouts] = useState<Workout[]>([]);
     const [loading, setLoading] = useState(true);
@@ -120,6 +122,12 @@ export default function PlanScreen() {
     const [error, setError] = useState<string | null>(null);
     const [dayFilter, setDayFilter] = useState('today');
     const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+    const [preview, setPreview] = useState<{ content: string; plan: RoutinePreview; proposal: RoutineProposal; timezone: string } | null>(null);
+    const [routineState, setRoutineState] = useState<RoutineState>({ active: null, pending: null });
+    const [viewedVersion, setViewedVersion] = useState<'active' | 'pending'>('active');
+    const [editingVersion, setEditingVersion] = useState(false);
+    const [timezoneWarning, setTimezoneWarning] = useState<string | null>(null);
+    const routineRepo = process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true' ? new LocalRoutineRepository() : new SupabaseRoutineRepository();
 
     useEffect(() => {
         loadEntries();
@@ -134,6 +142,10 @@ export default function PlanScreen() {
             ]);
             setEntries(mealEntries);
             setWorkouts(workoutList);
+            const state = visibleRoutine(await routineRepo.getState(), new Date());
+            setRoutineState(state);
+            if (!state.active && state.pending) setViewedVersion('pending');
+            setError(null);
         } catch {
             setError('Erro ao carregar plano');
         } finally {
@@ -149,7 +161,7 @@ export default function PlanScreen() {
                 copyToCacheDirectory: true,
             });
 
-            if (result.canceled || !result.assets?.length) return;
+            if (result.canceled || !result.assets?.length) { setEditingVersion(false); return; }
 
             const uri = result.assets[0].uri;
             let csvContent: string;
@@ -161,21 +173,46 @@ export default function PlanScreen() {
                 csvContent = await FileSystem.readAsStringAsync(uri);
             }
 
-            const parsed = parseCsvMealPlan(csvContent);
-            const workouts = parseCsvWorkouts(csvContent);
-            if (process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true') {
-                await saveLocalPlanImport(parsed, workouts, csvContent);
-            } else {
-                await savePlanImport(parsed, workouts, csvContent);
-            }
-
-            await loadEntries();
+            readRoutineCsv(csvContent);
+            const plan = validateRoutineCsv(csvContent);
+            const timezone = (await userRepo.getUser())?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+            const state = await routineRepo.getState();
+            if (state.pending && state.pending.timezone !== timezone) setTimezoneWarning(`Fuso alterado para ${timezone}. Revalide a agenda pendente.`);
+            else setTimezoneWarning(null);
+            const proposal = proposeRoutine(state, plan, csvContent, timezone, new Date());
+            setPreview({ content: csvContent, plan, proposal, timezone });
+            setRoutineState(visibleRoutine(state, new Date()));
+            setError(null);
         } catch (err) {
             const detail = err instanceof Error ? err.message : '';
             setError(detail ? `Erro ao importar CSV: ${detail}` : 'Erro ao importar CSV');
         } finally {
             setImporting(false);
         }
+    }
+
+    async function confirmImport() {
+        if (!preview) return;
+        try {
+            setImporting(true);
+            const timezone = (await userRepo.getUser())?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+            if (editingVersion && viewed) {
+                const current = visibleRoutine(await routineRepo.getState(), new Date());
+                const target = current[viewedVersion] ?? current.active ?? current.pending;
+                if (target?.id !== viewed.id || preview.proposal.version.anchorDay !== viewed.anchorDay || preview.proposal.version.anchorTime !== viewed.anchorTime || preview.timezone !== timezone) {
+                    throw new Error('Prévia expirada: recalcule e confirme novamente');
+                }
+                await routineRepo.edit(viewed.id, preview.plan, new Date());
+            }
+            else await routineRepo.confirm(preview.proposal, new Date(), timezone);
+            setPreview(null);
+            setEditingVersion(false);
+            await loadEntries();
+            setTimezoneWarning(null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao confirmar importação');
+            setPreview(null);
+        } finally { setImporting(false); }
     }
 
     if (loading) {
@@ -186,7 +223,12 @@ export default function PlanScreen() {
         );
     }
 
-    const timeline = buildTimeline(entries, workouts);
+    const currentRoutine = visibleRoutine(routineState, new Date());
+    const viewed = currentRoutine[viewedVersion] ?? currentRoutine.active ?? currentRoutine.pending;
+    const timeline = viewed ? (viewed.rows ?? []).map((row) => ({
+        id: row.id ?? String(row.line), day: row.day, time: row.time, activity: row.activity,
+        description: row.description, objective: row.focus,
+    })) : buildTimeline(entries, workouts);
     const selectedOrder = dayFilter === 'all' ? null : dayFilter === 'today' ? todayDayOrder() : parseInt(dayFilter, 10);
     const filteredTimeline =
         selectedOrder === null
@@ -209,12 +251,30 @@ export default function PlanScreen() {
                     </TypographyText>
                 </TouchableOpacity>
             </View>
+            {viewed && <View style={{ paddingHorizontal: Spacing.md }}>
+                <TypographyText variant="bodySmall" color={Colors.textSecondary}>Versão {routineState[viewedVersion] ? viewedVersion : viewed === routineState.active ? 'active' : 'pending'}: {viewed.startsAt.toLocaleString('pt-BR', { timeZone: viewed.timezone })} ({viewed.timezone})</TypographyText>
+                {routineState.active && routineState.pending && <Button label={viewedVersion === 'active' ? 'Ver pendente' : 'Ver ativa'} onPress={() => setViewedVersion((previous) => previous === 'active' ? 'pending' : 'active')} />}
+                <Button label="Editar versão exibida por CSV" onPress={() => { setEditingVersion(true); void handleImportCsv(); }} />
+                {viewed.rows && viewed.rows.length > 0 && <TypographyText variant="bodySmall" color={Colors.textSecondary}>Semana recorrente ancorada em {viewed.anchorDay} às {viewed.anchorTime}.</TypographyText>}
+            </View>}
 
             {error && (
                 <TypographyText variant="body" color={Colors.error} style={styles.errorText}>
                     {error}
                 </TypographyText>
             )}
+            {timezoneWarning && <TypographyText variant="bodySmall" color={Colors.error}>{timezoneWarning}</TypographyText>}
+            {preview && <View style={{ padding: Spacing.md }}>
+                <TypographyText variant="h4" color={Colors.textPrimary}>Prévia da rotina</TypographyText>
+                <TypographyText variant="body" color={Colors.textSecondary}>Início: {preview.proposal.startsAt.toLocaleString('pt-BR', { timeZone: preview.timezone })} ({preview.timezone})</TypographyText>
+                <TypographyText variant="body" color={Colors.textSecondary}>Substitui: {preview.proposal.replaces ?? 'nenhuma versão'} • ativa: {routineState.active?.id ?? 'nenhuma'} • pendente: {routineState.pending?.id ?? 'nenhuma'}</TypographyText>
+                {preview.proposal.replaces && <TypographyText variant="bodySmall" color={Colors.error}>Confirme a substituição da versão {preview.proposal.replaces}.</TypographyText>}
+                {preview.plan.rows.map((row) => <TypographyText key={row.line} variant="bodySmall" color={Colors.textPrimary}>
+                    {row.day} {row.time} • {row.activity}: {row.description} ({row.focus})
+                </TypographyText>)}
+                <Button label={editingVersion ? 'Confirmar edição' : 'Confirmar importação'} onPress={confirmImport} loading={importing} />
+                <Button label="Cancelar prévia" onPress={() => { setPreview(null); setEditingVersion(false); }} />
+            </View>}
 
             <ScrollView
                 horizontal
@@ -262,7 +322,12 @@ export default function PlanScreen() {
                             key={item.id}
                             style={styles.entryCard}
                             onPress={() => {
-                                const workout = workouts.find((candidate) => candidate.id === item.id);
+                                const rowIndex = viewed?.rows?.findIndex((row) => row.id === item.id) ?? -1;
+                                const workoutIndex = rowIndex < 0 ? -1 : viewed!.rows!.slice(0, rowIndex + 1).filter((row) => ['Calistenia', 'Musculação', 'HIT'].includes(row.activity)).length - 1;
+                                const workout = viewed
+                                    ? workoutIndex >= 0 && ['Calistenia', 'Musculação', 'HIT'].includes(viewed.rows![rowIndex].activity)
+                                        ? viewed.workouts[workoutIndex] : undefined
+                                    : workouts.find((candidate) => candidate.id === item.id);
                                 if (workout) setSelectedWorkout(workout);
                             }}
                         >

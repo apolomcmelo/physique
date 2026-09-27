@@ -4,6 +4,7 @@ import { WorkoutSession } from '../../entities/WorkoutSession';
 import { Exam } from '../../entities/Exam';
 import { MealPlanEntry } from '../../entities/MealPlan';
 import { FoodItem } from '../../entities/FoodItem';
+import { CSV_PROMPT_CONTRACT } from '../routine/CsvPromptContract';
 
 export function generateReviewPrompt(
     user: User,
@@ -116,8 +117,9 @@ Based on the user's progress and current plan:
        * Rest intervals: include rest between series and rest before next exercise (e.g. "(descanso: 15s / 30s transição)", "(rest: 15s, 30s proximo)", or trailing "+ 15s rest").
        * Shared sets prefix: "3 séries: 45s prancha + 35s wall sit (4.5kg) + 26 shoulder taps".
        * Alternatives: separate with "/" (e.g. "3x 12-15 Bicep curl (4kg) / KB halo (7.5kg)").
-       * Free-text / HIIT: for video/circuit sessions without fixed reps, provide descriptive text (e.g. "20 a 25 minutos de treino HIIT ou Tabata").
+        * HIT/video: 1x 25min Treino HIT (one exercise, one timed set; no invented reps/load).
    - "foco/motivo": for workouts, the muscle group / workout focus (e.g. "Peitoral e Tríceps", "Core & Estabilidade"). For meals, the biological/nutritional objective (e.g. "Aporte proteico e fibras", "Recuperação pós-treino").
 
+${CSV_PROMPT_CONTRACT}
 4. Highlight key observations, adjustments made, and recommendations for the user's progress toward their goal of ${user.goalWeight}kg.`;
 }

@@ -13,6 +13,7 @@ interface UserProfileRow {
     body_fat_percentage: number | null;
     protein_percentage: number | null;
     objective: string;
+    timezone?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -28,6 +29,7 @@ function rowToUser(row: UserProfileRow): User {
         bodyFatPercentage: row.body_fat_percentage,
         proteinPercentage: row.protein_percentage,
         objective: row.objective,
+        timezone: row.timezone ?? undefined,
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
     };
@@ -48,6 +50,7 @@ function userToRow(user: User): Omit<UserProfileRow, 'user_id' | 'created_at' | 
         body_fat_percentage: user.bodyFatPercentage,
         protein_percentage: user.proteinPercentage,
         objective: user.objective,
+        timezone: user.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
         updated_at: new Date().toISOString(),
     };
 }

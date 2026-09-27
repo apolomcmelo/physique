@@ -86,7 +86,7 @@ dia;horário;atividade/refeição;o que fazer/o que comer;foco/motivo
 | `o que fazer/o que comer` | Meal description or workout exercise prescriptions.                                                                                                               |
 | `foco/motivo` | Meal biological objective/context or workout name/focus.                                                                                                          |
 
-**Current limitation:** the parsers split strings rather than implementing full quoted CSV. They can silently skip malformed content and import data in separate writes. The agreed quoted-field support, row errors, complete preview, recurring version activation and all-or-nothing behavior are planned, not delivered guarantees.
+**Current limitation:** a new `readRoutineCsv` reader validates the header and quoted fields with line errors, and `validateRoutineCsv` can construct an in-memory preview. The Plan screen applies structural validation but still passes content to the legacy parsers and saves without a complete confirmation preview; strict import and recurring version activation are **not yet delivered**. O1–O3 in the requirements must be resolved before completing that contract. Cloud/local multi-entity writes retain the P0 transactional/snapshot safeguards, but those do not make the legacy parsers strict.
 
 ### Prescription examples and known gaps
 

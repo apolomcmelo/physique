@@ -54,7 +54,7 @@ export function nextOccurrence(day: string, time: string, now: Date = new Date()
 }
 
 /** Matches the leading prescription of an exercise segment: "4x 10-12", "3x 45s", "3x 1 a 1:20min", or a bare "26". */
-const PRESCRIPTION_REGEX = /^(?:(\d+)\s*x\s+)?(\d+(?:-\d+|\s*a\s*[\d:]+)?)(min|s)?\s+([\s\S]*)$/;
+const PRESCRIPTION_REGEX = /^(?:(\d+)\s*x\s+)?(\d+(?::\d{2}|-\d+|\s*a\s*[\d:]+)?)(min|s)?\s+([\s\S]*)$/;
 
 /** Matches an "N séries:" prefix that applies one set count to every exercise in the description. */
 const SHARED_SETS_PREFIX_REGEX = /^(\d+)\s+s[ée]ries\s*:\s*(.+)$/;
@@ -142,13 +142,15 @@ function parseExerciseSegment(segment: string, sharedSets: number | null): Exerc
     const rest = restText.trim();
     if (!rest) return null;
 
+    const annotations = [...rest.matchAll(/\(([^)]*)\)/g)];
+    const weightAnnotation = annotations.find((match) => /\d+(?:[.,]\d+)?\s*kg/i.test(match[1]));
     const weightMatch = rest.match(WEIGHT_SUFFIX_REGEX);
     const baseText = (weightMatch ? weightMatch[1] : rest).trim();
     const name = baseText.replace(/\s*\(.*?\)$/, '').trim();
     if (!name) return null;
 
     const { reps, durationSeconds, durationLabel } = parsePrescription(countText, unit);
-    const restIntervals = parseRestIntervals(weightMatch ? weightMatch[2] : rest);
+    const restIntervals = parseRestIntervals(rest);
     const noteParts = [durationLabel];
     if (weightMatch) {
         const annotation = weightMatch[2].replace(/[\d.,]+\s*kg/gi, '').trim();
@@ -160,7 +162,7 @@ function parseExerciseSegment(segment: string, sharedSets: number | null): Exerc
         orderIndex: 0,
         sets: setsText ? parseInt(setsText, 10) : sharedSets,
         repsPerSet: reps,
-        weightKg: weightMatch ? parseWeight(weightMatch[2]) : null,
+        weightKg: weightAnnotation ? parseWeight(weightAnnotation[1]) : null,
         durationSeconds,
         restSecondsBetweenSets: restIntervals.restSecondsBetweenSets,
         restSecondsBeforeNextExercise: restIntervals.restSecondsBeforeNextExercise,
@@ -224,7 +226,8 @@ export function parseExercises(description: string): Exercise[] {
     for (const segment of body.split('+')) {
         const restOnlyValue = parseRestOnlySegment(segment);
         if (restOnlyValue !== null) {
-            trailingRestSeconds = restOnlyValue;
+            if (exercises.length > 0) exercises[exercises.length - 1].restSecondsBeforeNextExercise = restOnlyValue;
+            else trailingRestSeconds = restOnlyValue;
             continue;
         }
 
@@ -249,19 +252,11 @@ export function parseExercises(description: string): Exercise[] {
     const orderedExercises = exercises.map((exercise, index) => ({ ...exercise, orderIndex: index }));
 
     if (orderedExercises.length === 0) {
-        return [
-            createExercise({
-                name: trimmed,
-                orderIndex: 0,
-                sets: null,
-                repsPerSet: null,
-                weightKg: null,
-                durationSeconds: null,
-                restSecondsBetweenSets: null,
-                restSecondsBeforeNextExercise: null,
-                notes: trimmed,
-            }),
-        ];
+        return [createExercise({
+            name: trimmed, orderIndex: 0, sets: null, repsPerSet: null, weightKg: null,
+            durationSeconds: null, restSecondsBetweenSets: null,
+            restSecondsBeforeNextExercise: null, notes: trimmed,
+        })];
     }
 
     if (trailingRestSeconds !== null && orderedExercises.length > 0) {
@@ -269,6 +264,38 @@ export function parseExercises(description: string): Exercise[] {
     }
 
     return orderedExercises;
+}
+
+export function parseStrictExercises(description: string, activity?: string): Exercise[] {
+    const segments = description.replace(/^\d+\s+s[ée]ries\s*:\s*/i, '').split('+').map((part) => part.trim());
+    if (segments.some((segment) => !segment)) throw new Error('Prescrição de treino inválida');
+    if (parseRestOnlySegment(segments[0]) !== null) throw new Error('Prescrição de treino inválida');
+    if (segments.some((segment) => {
+        const range = segment.match(/(?:^|\s)(\d+)-(\d+)\s/);
+        return range && Number(range[2]) < Number(range[1]);
+    })) throw new Error('Prescrição de treino inválida');
+    if (/\(\s*\?+\s*\)/.test(description)) throw new Error('Prescrição de treino inválida');
+    if (/[()]\s*$/.test(description) && /\((?![^)]*(?:kg|descanso|rest|pausa|transi[cç][aã]o))[^)]*\)/i.test(description)) throw new Error('Prescrição de treino inválida');
+    if (/\(\s*kg\s*\)/i.test(description)) throw new Error('Prescrição de treino inválida');
+    if (/(?:rest|descanso|pausa|transi[cç][aã]o)\s*:\s*-\d+/i.test(description)) throw new Error('Prescrição de treino inválida');
+    if (/\b\d+:([6-9]\d)min\b/i.test(description) || /\d+[.,]\d{3,}\s*kg/i.test(description) || /-\d+(?:[.,]\d+)?\s*kg/i.test(description)) throw new Error('Prescrição de treino inválida');
+    const parsed = parseExercises(description);
+    if (parsed.some((exercise) => exercise.sets === null || exercise.sets < 1 || exercise.sets > 100 ||
+        (exercise.repsPerSet === null && exercise.durationSeconds === null) ||
+        (exercise.repsPerSet !== null && (exercise.repsPerSet < 1 || exercise.repsPerSet > 1000)) ||
+        (exercise.durationSeconds !== null && (exercise.durationSeconds < 1 || exercise.durationSeconds > 10800)) ||
+        (exercise.weightKg !== null && exercise.weightKg > 1000) ||
+        (exercise.restSecondsBetweenSets !== null && exercise.restSecondsBetweenSets !== undefined && exercise.restSecondsBetweenSets > 300) ||
+        (exercise.restSecondsBeforeNextExercise !== null && exercise.restSecondsBeforeNextExercise !== undefined && exercise.restSecondsBeforeNextExercise > 300))) {
+        throw new Error('Prescrição de treino inválida');
+    }
+    if (parsed.length < segments.filter((segment) => parseRestOnlySegment(segment) === null).length) {
+        throw new Error('Prescrição de treino inválida');
+    }
+    if (activity === 'HIT' && (parsed.length !== 1 || parsed[0].sets !== 1 || parsed[0].durationSeconds === null || parsed[0].repsPerSet !== null || parsed[0].weightKg !== null)) {
+        throw new Error('HIT exige uma série cronometrada');
+    }
+    return parsed;
 }
 
 /**
