@@ -26,8 +26,20 @@ async function main() {
         await client.query('do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$');
         const migrationDir = path.join(__dirname, '../src/infrastructure/supabase/migrations');
         for (const name of fs.readdirSync(migrationDir).filter((name) => name.endsWith('.sql')).sort()) {
+            if (name === '012_p1_actual_workout.sql') {
+                const legacyOwner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+                const legacyWorkoutId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+                const legacySessionId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+                await client.query('insert into auth.users (id) values ($1)', [legacyOwner]);
+                await client.query("select set_config('request.jwt.claim.sub', $1, false)", [legacyOwner]);
+                await client.query('insert into workouts (id, name, type, user_id) values ($1, $2, $3, $4)', [legacyWorkoutId, 'Legacy', 'HIT', legacyOwner]);
+                await client.query('insert into workout_sessions (id, workout_id, started_at, finished_at, user_id) values ($1, $2, $3, $4, $5)', [legacySessionId, legacyWorkoutId, '2026-09-24T10:00:00Z', '2026-09-24T10:25:00Z', legacyOwner]);
+                await client.query("select set_config('request.jwt.claim.sub', '', false)");
+            }
             await client.query(fs.readFileSync(path.join(migrationDir, name), 'utf8'));
         }
+        assert.equal((await client.query('select status from workout_sessions where id = $1', ['cccccccc-cccc-4ccc-8ccc-cccccccccccc'])).rows[0].status,
+            'complete', 'migration must mark pre-existing finished sessions complete');
         const owner = '11111111-1111-4111-8111-111111111111';
         const workoutId = '33333333-3333-4333-8333-333333333333';
         const exerciseId = '44444444-4444-4444-8444-444444444444';

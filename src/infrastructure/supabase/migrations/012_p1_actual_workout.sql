@@ -1,9 +1,31 @@
 -- Performed timed sets and explicit partial/completed session state.
-alter table completed_sets add column duration_seconds integer
-  check (duration_seconds is null or duration_seconds >= 0);
-alter table workout_sessions add column status text not null default 'active'
-  check (status in ('active', 'complete', 'partial'));
-update workout_sessions set status = 'complete' where finished_at is not null;
+alter table completed_sets
+add column duration_seconds integer check (
+    duration_seconds is null
+    or duration_seconds >= 0
+);
+
+alter table workout_sessions
+add column status text not null default 'active' check (
+    status in (
+        'active',
+        'complete',
+        'partial'
+    )
+);
+
+do $$
+declare session_owner uuid;
+begin
+  for session_owner in
+    select distinct user_id from workout_sessions where finished_at is not null
+  loop
+    perform set_config('request.jwt.claim.sub', session_owner::text, true);
+    update workout_sessions set status = 'complete'
+    where user_id = session_owner and finished_at is not null;
+  end loop;
+  perform set_config('request.jwt.claim.sub', '', true);
+end $$;
 
 create or replace function save_session_atomically(p_session jsonb, p_sets jsonb)
 returns void language plpgsql security invoker set search_path = public as $$
