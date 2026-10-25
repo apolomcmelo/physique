@@ -182,7 +182,18 @@ export const WorkoutFormModal = ({
                 scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
             });
             onClose();
-        } catch (e) {
+        } catch (cause: unknown) {
+            console.error('[workout.form] save failed', {
+                operation: isEditing ? 'update' : 'create',
+                workoutType: type,
+                exerciseCount: builtExercises.length,
+                timedExercises: builtExercises
+                    .map((exercise, index) => exercise.durationSeconds === null
+                        ? null
+                        : { exerciseIndex: index, durationSeconds: exercise.durationSeconds })
+                    .filter((exercise) => exercise !== null),
+                error: cause,
+            });
             setError('Erro ao salvar treino');
         }
     }

@@ -82,7 +82,9 @@ export default function ActiveWorkoutScreen() {
         void activateKeepAwakeAsync('active-workout').then(() => {
             enabled = true;
             if (!mounted) deactivateKeepAwake('active-workout');
-        }).catch(() => {});
+        }).catch((cause: unknown) => {
+            console.warn('[workout] keep-awake activation failed', cause);
+        });
         return () => { mounted = false; if (enabled) deactivateKeepAwake('active-workout'); };
     }, [session?.id]);
 
@@ -99,7 +101,8 @@ export default function ActiveWorkoutScreen() {
             if (existing) { setResumableSession(existing); return; }
             const s = await startWorkoutSession(workoutRepo, workoutId);
             setSession(s);
-        } catch {
+        } catch (cause: unknown) {
+            console.error('[workout] initialization failed', { workoutId, error: cause });
             setError('Erro ao iniciar treino');
         } finally {
             setLoading(false);
@@ -152,6 +155,8 @@ export default function ActiveWorkoutScreen() {
         if (!session || !currentExercise || savingSetRef.current || finishingRef.current || finalSetRecorded) return;
         savingSetRef.current = true;
         setSetSaving(true);
+        const performedDurationSeconds = setDuration === null ? null : setStartedAtRef.current === null ? null
+            : Math.min(setDuration, Math.max(0, Math.round((Date.now() - setStartedAtRef.current) / 1000)));
         try {
             const updated = await completeSet(
                 workoutRepo,
@@ -159,8 +164,7 @@ export default function ActiveWorkoutScreen() {
                 currentExercise,
                 currentSetNumber,
                 { repsCompleted: Number(actualReps), weightUsedKg: actualWeight.trim() ? Number(actualWeight.replace(',', '.')) : null,
-                    durationSeconds: setDuration === null ? null : setStartedAtRef.current === null ? null
-                        : Math.min(setDuration, Math.max(0, Math.round((Date.now() - setStartedAtRef.current) / 1000))) },
+                    durationSeconds: performedDurationSeconds },
             );
             setSession(updated);
             setError(null);
@@ -182,7 +186,17 @@ export default function ActiveWorkoutScreen() {
                 setRestExpired(restStartsAt + restDuration * 1000 <= Date.now());
             }
             setStartedAtRef.current = null;
-        } catch {
+        } catch (cause: unknown) {
+            console.error('[workout] set completion failed', {
+                workoutId: session.workoutId,
+                sessionId: session.id,
+                exerciseId: currentExercise.id,
+                setNumber: currentSetNumber,
+                timedExercise: setDuration !== null,
+                prescribedDurationSeconds: setDuration,
+                actualDurationSeconds: performedDurationSeconds,
+                error: cause,
+            });
             setError('Erro ao registrar série');
         } finally {
             savingSetRef.current = false;
@@ -219,7 +233,13 @@ export default function ActiveWorkoutScreen() {
             setFinishing(true);
             await finishWorkoutSession(workoutRepo, session, workout);
             router.replace('/(tabs)/workout');
-        } catch {
+        } catch (cause: unknown) {
+            console.error('[workout] workout finalization failed', {
+                workoutId: workout.id,
+                sessionId: session.id,
+                recordedSetCount: session.sets.length,
+                error: cause,
+            });
             setError('Erro ao finalizar treino');
         } finally {
             finishingRef.current = false;
@@ -234,7 +254,13 @@ export default function ActiveWorkoutScreen() {
             setFinishing(true);
             await savePartialWorkoutSession(workoutRepo, session);
             router.replace('/(tabs)/workout');
-        } catch {
+        } catch (cause: unknown) {
+            console.error('[workout] partial session save failed', {
+                workoutId: session.workoutId,
+                sessionId: session.id,
+                recordedSetCount: session.sets.length,
+                error: cause,
+            });
             setError('Erro ao salvar sessão parcial');
         } finally {
             finishingRef.current = false;
@@ -254,7 +280,17 @@ export default function ActiveWorkoutScreen() {
             await workoutRepo.saveWorkoutSession(corrected);
             setSession(corrected);
             setError(null);
-        } catch { setError('Erro ao corrigir série'); }
+        } catch (cause: unknown) {
+            console.error('[workout] timed set correction failed', {
+                workoutId: session.workoutId,
+                sessionId: session.id,
+                exerciseId: currentExercise.id,
+                setNumber: recorded.setNumber,
+                correctedDurationSeconds: duration,
+                error: cause,
+            });
+            setError('Erro ao corrigir série');
+        }
         finally { savingSetRef.current = false; }
     }
 
@@ -267,7 +303,14 @@ export default function ActiveWorkoutScreen() {
                 try {
                     await workoutRepo.deleteWorkoutSession(sessionToDiscard.id);
                     router.replace('/(tabs)/workout');
-                } catch { setError('Erro ao descartar treino'); }
+                } catch (cause: unknown) {
+                    console.error('[workout] session discard failed', {
+                        workoutId: sessionToDiscard.workoutId,
+                        sessionId: sessionToDiscard.id,
+                        error: cause,
+                    });
+                    setError('Erro ao descartar treino');
+                }
             } },
         ]);
     }

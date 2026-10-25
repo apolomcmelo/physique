@@ -177,7 +177,24 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
                 notes: e.notes,
             })),
         });
-        if (error) throw new Error(`Failed to save workout: ${error.message}`);
+
+        if (error) {
+            console.error('[workout.persistence] workout RPC returned error', {
+                rpc: 'create_workout_atomically',
+                workoutId: workout.id,
+                exerciseCount: workout.exercises.length,
+                timedExercises: workout.exercises.flatMap((exercise, index) => exercise.durationSeconds === null
+                    ? []
+                    : [{ exerciseId: exercise.id, exerciseIndex: index, durationSeconds: exercise.durationSeconds }]),
+                error: {
+                    message: error.message,
+                    code: error.code,
+                    details: error.details,
+                    hint: error.hint,
+                },
+            });
+            throw new Error(`Failed to save workout: ${error.message}`);
+        }
     }
 
     async updateWorkout(workout: Workout): Promise<void> {
@@ -199,7 +216,23 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
                 notes: e.notes,
             })),
         });
-        if (error) throw new Error(`Failed to update workout: ${error.message}`);
+        if (error) {
+            console.error('[workout.persistence] workout RPC returned error', {
+                rpc: 'save_workout_atomically',
+                workoutId: workout.id,
+                exerciseCount: workout.exercises.length,
+                timedExercises: workout.exercises.flatMap((exercise, index) => exercise.durationSeconds === null
+                    ? []
+                    : [{ exerciseId: exercise.id, exerciseIndex: index, durationSeconds: exercise.durationSeconds }]),
+                error: {
+                    message: error.message,
+                    code: error.code,
+                    details: error.details,
+                    hint: error.hint,
+                },
+            });
+            throw new Error(`Failed to update workout: ${error.message}`);
+        }
     }
 
     async deleteWorkout(id: string): Promise<void> {
@@ -211,23 +244,82 @@ export class SupabaseWorkoutRepository implements IWorkoutRepository {
     }
 
     async saveWorkoutSession(session: WorkoutSession): Promise<void> {
-        const userId = await requireAuthUserId();
-        const { error } = await supabase.rpc('save_session_atomically', {
-            p_session: {
-                id: session.id, workout_id: session.workoutId,
-                started_at: session.startedAt.toISOString(),
-                finished_at: session.finishedAt?.toISOString() ?? null,
-                status: session.status ?? (session.finishedAt ? 'complete' : 'active'),
-                user_id: userId,
-            },
-            p_sets: session.sets.map((s) => ({
-                id: s.id, session_id: session.id, exercise_id: s.exerciseId,
-                set_number: s.setNumber, reps_completed: s.repsCompleted,
-                weight_used_kg: s.weightUsedKg, completed_at: s.completedAt.toISOString(),
-                duration_seconds: s.durationSeconds ?? null,
-            })),
-        });
-        if (error) throw new Error(`Failed to save workout session: ${error.message}`);
+        const timedSets = session.sets
+            .filter((set) => set.prescribedDurationSeconds != null)
+            .map((set) => ({
+                exerciseId: set.exerciseId,
+                setNumber: set.setNumber,
+                prescribedDurationSeconds: set.prescribedDurationSeconds,
+                durationSeconds: set.durationSeconds,
+            }));
+        const context = {
+            rpc: 'save_session_atomically',
+            sessionId: session.id,
+            workoutId: session.workoutId,
+            status: session.status ?? (session.finishedAt ? 'complete' : 'active'),
+            setCount: session.sets.length,
+            timedSetCount: timedSets.length,
+            timedSets,
+        };
+
+        let userId: string;
+        try {
+            userId = await requireAuthUserId();
+        } catch (cause: unknown) {
+            console.error('[workout.persistence] authenticated user lookup failed', { ...context, error: cause });
+            throw cause;
+        }
+
+        let request: {
+            p_session: Record<string, string | null>;
+            p_sets: Array<Record<string, string | number | null>>;
+        };
+        try {
+            request = {
+                p_session: {
+                    id: session.id,
+                    workout_id: session.workoutId,
+                    started_at: session.startedAt.toISOString(),
+                    finished_at: session.finishedAt?.toISOString() ?? null,
+                    status: context.status,
+                    user_id: userId,
+                },
+                p_sets: session.sets.map((set) => ({
+                    id: set.id,
+                    session_id: session.id,
+                    exercise_id: set.exerciseId,
+                    set_number: set.setNumber,
+                    reps_completed: set.repsCompleted,
+                    weight_used_kg: set.weightUsedKg,
+                    completed_at: set.completedAt.toISOString(),
+                    duration_seconds: set.durationSeconds ?? null,
+                })),
+            };
+        } catch (cause: unknown) {
+            console.error('[workout.persistence] session payload preparation failed', { ...context, error: cause });
+            throw cause;
+        }
+
+        let response: Awaited<ReturnType<typeof supabase.rpc>>;
+        try {
+            response = await supabase.rpc('save_session_atomically', request);
+        } catch (cause: unknown) {
+            console.error('[workout.persistence] RPC request threw', { ...context, error: cause });
+            throw cause;
+        }
+
+        if (response.error) {
+            console.error('[workout.persistence] RPC returned error', {
+                ...context,
+                error: {
+                    message: response.error.message,
+                    code: response.error.code,
+                    details: response.error.details,
+                    hint: response.error.hint,
+                },
+            });
+            throw new Error(`Failed to save workout session: ${response.error.message}`);
+        }
     }
 
     async getWorkoutSessions(workoutId?: string): Promise<WorkoutSession[]> {

@@ -91,7 +91,8 @@ export default function WorkoutScreen() {
             setLoading(true);
             const data = await workoutRepo.getWorkouts();
             setWorkouts(sortWorkoutsByScheduledAt(data));
-        } catch {
+        } catch (cause: unknown) {
+            console.error('[workout.list] load failed', { error: cause });
             setError('Erro ao carregar treinos');
         } finally {
             setLoading(false);
@@ -117,7 +118,8 @@ export default function WorkoutScreen() {
         try {
             await workoutRepo.deleteWorkout(workout.id);
             await loadWorkouts();
-        } catch {
+        } catch (cause: unknown) {
+            console.error('[workout.delete] failed', { workoutId: workout.id, error: cause });
             setError('Erro ao excluir treino');
         }
     }

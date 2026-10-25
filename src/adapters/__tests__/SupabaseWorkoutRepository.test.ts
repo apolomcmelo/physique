@@ -256,6 +256,53 @@ describe('SupabaseWorkoutRepository', () => {
                 'Failed to save workout session: conflict',
             );
         });
+
+        it('logs RPC diagnostics and timed-set durations when persistence fails', async () => {
+            const logError = jest.spyOn(console, 'error').mockImplementation(() => {});
+            mockRpc.mockResolvedValue({ error: {
+                message: 'column duration_seconds does not exist',
+                code: '42703',
+                details: 'Database schema is missing a required column',
+                hint: 'Apply the workout duration migration',
+            } });
+            const timedSession: WorkoutSession = {
+                ...baseSession,
+                sets: [{
+                    id: 'set-timed',
+                    exerciseId: 'wall-sit',
+                    setNumber: 1,
+                    repsCompleted: 0,
+                    weightUsedKg: null,
+                    durationSeconds: 45,
+                    prescribedDurationSeconds: 45,
+                    completedAt: new Date('2024-01-01T10:00:45.000Z'),
+                }],
+            };
+
+            await expect(repo.saveWorkoutSession(timedSession)).rejects.toThrow(
+                'Failed to save workout session: column duration_seconds does not exist',
+            );
+            expect(logError).toHaveBeenCalledWith('[workout.persistence] RPC returned error', expect.objectContaining({
+                rpc: 'save_session_atomically',
+                sessionId: 's1',
+                workoutId: 'w1',
+                setCount: 1,
+                timedSetCount: 1,
+                timedSets: [{
+                    exerciseId: 'wall-sit',
+                    setNumber: 1,
+                    prescribedDurationSeconds: 45,
+                    durationSeconds: 45,
+                }],
+                error: {
+                    message: 'column duration_seconds does not exist',
+                    code: '42703',
+                    details: 'Database schema is missing a required column',
+                    hint: 'Apply the workout duration migration',
+                },
+            }));
+            logError.mockRestore();
+        });
     });
 
     it('persists actual timed duration and partial status in the atomic session request', async () => {

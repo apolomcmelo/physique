@@ -49,6 +49,35 @@ it('leaves the same set executable after a failed save', async () => {
     expect(screen.getByText('✓ Terminei a Série')).toBeTruthy();
 });
 
+it('logs timed-set context when persistence fails', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-25T10:00:00Z'));
+    const logError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockGetWorkout.mockResolvedValue({ ...workout, type: 'HIT', exercises: [{
+        ...workout.exercises[0], repsPerSet: null, weightKg: null, durationSeconds: 45,
+    }] });
+    mockSaveSession.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('RPC failure'));
+    const screen = render(<ActiveWorkoutScreen />);
+    await waitFor(() => screen.getByText('▶ Iniciar Série'));
+    fireEvent.press(screen.getByText('▶ Iniciar Série'));
+    jest.setSystemTime(new Date('2026-09-25T10:00:45Z'));
+    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+
+    await waitFor(() => screen.getByText('Erro ao registrar série'));
+    expect(logError).toHaveBeenCalledWith('[workout] set completion failed', expect.objectContaining({
+        workoutId: 'workout-1',
+        sessionId: expect.any(String),
+        exerciseId: 'exercise-1',
+        setNumber: 1,
+        timedExercise: true,
+        prescribedDurationSeconds: 45,
+        actualDurationSeconds: 45,
+        error: expect.objectContaining({ message: 'RPC failure' }),
+    }));
+    logError.mockRestore();
+    jest.useRealTimers();
+});
+
 it('records edited performed repetitions and load instead of the prescription', async () => {
     const screen = render(<ActiveWorkoutScreen />);
     await waitFor(() => screen.getByText('✓ Terminei a Série'));
