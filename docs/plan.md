@@ -110,11 +110,14 @@ Requisitos: ALI, MED, HIS. Usa ocorrências de P2.
 - [x] Registrar confirmação alimentar com snapshot textual e horário, pulos, substituições/notas e refeições avulsas; sem cálculo automático nutricional. Correção, data retroativa e exclusão confirmada disponíveis no histórico.
 - [ ] Histórico de medições é a fonte de verdade por indicador; backdating, edição/exclusão isolada e múltiplas leituras diárias.
 - [ ] Meta com início, alvo e baseline válido; mostrar ausência de baseline sem inventar leitura; preservar metas anteriores.
-- [ ] Valores pt-BR corretamente interpretados e validados; refresh entre telas após mudanças.
+- [x] Valores decimais pt-BR corretamente interpretados, validados e exibidos nos formulários de perfil/peso, correções de carga e cadastro nutricional.
+- [ ] Refresh entre telas após mudanças.
 
 Aceite: mudar rotina não reescreve consumo; peso novo não apaga percentual antigo; corrigir data X não afeta Y; vírgula decimal preservada; Dashboard/Profile/exports usam os mesmos valores atuais.
 
 Progresso parcial da trilha ALI: `MealConsumption` e porta própria mantêm o texto/situação/data do consumo fora de `MealPlanEntry`; Plan oferece confirmação rápida, pulo, substituição/notas e refeição avulsa; History permite corrigir e excluir com confirmação; prompts de revisão agora recebem consumos reais, inclusive pulos, em vez do cronograma. Adaptadores local por conta e Supabase usam a migration aditiva `013_p4_meal_consumptions.sql` com RLS por proprietário. Validado: 33 testes focados passaram, `npx tsc --noEmit` passou e o fluxo Playwright de confirmação→histórico passou; migration ainda não foi executada contra PostgreSQL/Supabase. MED e os demais itens P4 continuam pendentes.
+
+Progresso de decimais pt-BR (validação compartilhada): `parseLocalizedDecimal` aceita vírgula ou ponto, mantém zero distinto de entrada vazia e rejeita texto residual, separadores repetidos/ambíguos e valores incompletos. Aplicado ao perfil, medições de peso, correções de carga, cadastro de alimentos e leitura OCR; entradas inválidas não são salvas e números são exibidos com locale `pt-BR`. OCR também rejeita valores truncados com separadores adicionais. Campos nutricionais vazios são bloqueados até P5 suportar valores ausentes no modelo; não são convertidos silenciosamente em zero/porção padrão. Cobertura: 52 testes focados, 61 suítes/500 testes Jest, TypeScript, export web (24 rotas) e três fluxos Playwright de perfil/alimento/peso com vírgula passaram. Conversão de pesos do contrato CSV permanece delimitada a P2; refresh sincronizado entre telas e os demais itens MED/P4 continuam pendentes.
 
 ### P5 — Tabela nutricional completa e OCR revisável
 

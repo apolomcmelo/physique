@@ -14,6 +14,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Exercise, Workout } from '../../src/domain/entities/Workout';
 import { WorkoutSession } from '../../src/domain/entities/WorkoutSession';
 import { completeSet } from '../../src/domain/use-cases/workout/CompleteSet';
+import { parseLocalizedDecimal } from '../../src/domain/value-objects/LocalizedDecimal';
 import { finishWorkoutSession } from '../../src/domain/use-cases/workout/FinishWorkoutSession';
 import { startWorkoutSession } from '../../src/domain/use-cases/workout/StartWorkoutSession';
 import { nextRest } from '../../src/domain/use-cases/workout/WorkoutRest';
@@ -153,6 +154,15 @@ export default function ActiveWorkoutScreen() {
 
     async function handleCompleteSet() {
         if (!session || !currentExercise || savingSetRef.current || finishingRef.current || finalSetRecorded) return;
+        const weightUsedKg = actualWeight.trim() ? parseLocalizedDecimal(actualWeight) : null;
+        if (actualWeight.trim() && weightUsedKg === null) {
+            setError('Informe uma carga válida; use vírgula ou ponto como separador decimal.');
+            return;
+        }
+        if (weightUsedKg !== null && weightUsedKg < 0) {
+            setError('A carga não pode ser negativa');
+            return;
+        }
         savingSetRef.current = true;
         setSetSaving(true);
         const performedDurationSeconds = setDuration === null ? null : setStartedAtRef.current === null ? null
@@ -164,7 +174,7 @@ export default function ActiveWorkoutScreen() {
                 currentExercise,
                 currentSetNumber,
                 { repsCompleted: setDuration !== null ? 0 : Number(actualReps),
-                    weightUsedKg: actualWeight.trim() ? Number(actualWeight.replace(',', '.')) : null,
+                    weightUsedKg,
                     durationSeconds: performedDurationSeconds },
             );
             setSession(updated);

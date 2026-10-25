@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Exercise, Workout, WorkoutType } from '../../domain/entities/Workout';
+import { parseLocalizedDecimal } from '../../domain/value-objects/LocalizedDecimal';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Card } from './Card';
@@ -159,6 +160,16 @@ export const WorkoutFormModal = ({
             return;
         }
 
+        const hasInvalidWeight = exercises.some((ex) => {
+            if (!ex.name.trim() || !ex.weightKg.trim()) return false;
+            const weight = parseLocalizedDecimal(ex.weightKg);
+            return weight === null || weight < 0;
+        });
+        if (hasInvalidWeight) {
+            setError('Informe uma carga válida e não negativa; use vírgula ou ponto como separador decimal.');
+            return;
+        }
+
         const builtExercises = exercises
             .filter((ex) => ex.name.trim())
             .map((ex, index) => ({
@@ -167,7 +178,7 @@ export const WorkoutFormModal = ({
                 sets: ex.sets ? parseInt(ex.sets, 10) : null,
                 repsPerSet: ex.repsPerSet ? parseInt(ex.repsPerSet, 10) : null,
                 durationSeconds: ex.durationSeconds ? parseInt(ex.durationSeconds, 10) : null,
-                weightKg: ex.weightKg ? parseFloat(ex.weightKg) : null,
+                weightKg: ex.weightKg.trim() ? parseLocalizedDecimal(ex.weightKg) : null,
                 restSecondsBetweenSets: ex.restSecondsBetweenSets ? parseInt(ex.restSecondsBetweenSets, 10) : null,
                 restSecondsBeforeNextExercise: ex.restSecondsBeforeNextExercise ? parseInt(ex.restSecondsBeforeNextExercise, 10) : null,
                 notes: ex.notes.trim() || null,

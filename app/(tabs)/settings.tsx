@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Exam, ExamFileType, createExam } from '../../src/domain/entities/Exam';
 import { User, calculateAge } from '../../src/domain/entities/User';
+import { parseLocalizedDecimal } from '../../src/domain/value-objects/LocalizedDecimal';
 import { generateNewPlanPrompt } from '../../src/domain/use-cases/prompt/GenerateNewPlanPrompt';
 import { generateReviewPrompt } from '../../src/domain/use-cases/prompt/GenerateReviewPrompt';
 import {
@@ -103,11 +104,6 @@ export default function SettingsScreen() {
         }
     }
 
-    /** Accepts comma or dot as decimal separator (pt-BR keyboards use comma). */
-    function parseDecimal(value: string): number {
-        return parseFloat(value.replace(',', '.'));
-    }
-
     async function handleSaveProfile() {
         setError(null);
         if (!name.trim() || !dateOfBirth || !height || !currentWeight || !goalWeight || !objective.trim()) {
@@ -119,11 +115,23 @@ export default function SettingsScreen() {
             setError('Data de nascimento inválida (use DD/MM/AAAA e uma data no passado)');
             return;
         }
-        const parsedHeight = parseDecimal(height);
-        const parsedCurrentWeight = parseDecimal(currentWeight);
-        const parsedGoalWeight = parseDecimal(goalWeight);
+        const parsedHeight = parseLocalizedDecimal(height);
+        const parsedCurrentWeight = parseLocalizedDecimal(currentWeight);
+        const parsedGoalWeight = parseLocalizedDecimal(goalWeight);
+        const parsedBodyFat = bodyFat.trim() ? parseLocalizedDecimal(bodyFat) : null;
+        const parsedProtein = protein.trim() ? parseLocalizedDecimal(protein) : null;
+        if (parsedHeight === null || parsedCurrentWeight === null || parsedGoalWeight === null
+            || (bodyFat.trim() && parsedBodyFat === null) || (protein.trim() && parsedProtein === null)) {
+            setError('Informe números válidos; use vírgula ou ponto como separador decimal.');
+            return;
+        }
         if (parsedHeight <= 0 || parsedCurrentWeight <= 0 || parsedGoalWeight <= 0) {
             setError('Altura e pesos devem ser maiores que zero');
+            return;
+        }
+        if ((parsedBodyFat !== null && (parsedBodyFat < 0 || parsedBodyFat > 100))
+            || (parsedProtein !== null && (parsedProtein < 0 || parsedProtein > 100))) {
+            setError('Percentuais devem estar entre 0 e 100');
             return;
         }
         try {
@@ -134,8 +142,8 @@ export default function SettingsScreen() {
                 height: parsedHeight,
                 currentWeight: parsedCurrentWeight,
                 goalWeight: parsedGoalWeight,
-                bodyFatPercentage: bodyFat ? parseDecimal(bodyFat) : null,
-                proteinPercentage: protein ? parseDecimal(protein) : null,
+                bodyFatPercentage: parsedBodyFat,
+                proteinPercentage: parsedProtein,
                 objective: objective.trim(),
             });
             setUser(updated);
@@ -323,14 +331,14 @@ export default function SettingsScreen() {
                         <View style={styles.infoGrid}>
                             <InfoRow label="Data de Nascimento" value={dobFormatted} />
                             <InfoRow label="Idade" value={age !== null ? `${age} anos` : '—'} />
-                            <InfoRow label="Altura" value={`${user.height} cm`} />
-                            <InfoRow label="Peso Atual" value={`${user.currentWeight} kg`} />
-                            <InfoRow label="Peso Objetivo" value={`${user.goalWeight} kg`} />
+                            <InfoRow label="Altura" value={`${user.height.toLocaleString('pt-BR')} cm`} />
+                            <InfoRow label="Peso Atual" value={`${user.currentWeight.toLocaleString('pt-BR')} kg`} />
+                            <InfoRow label="Peso Objetivo" value={`${user.goalWeight.toLocaleString('pt-BR')} kg`} />
                             {user.bodyFatPercentage !== null && (
-                                <InfoRow label="Gordura" value={`${user.bodyFatPercentage}%`} />
+                                <InfoRow label="Gordura" value={`${user.bodyFatPercentage.toLocaleString('pt-BR')}%`} />
                             )}
                             {user.proteinPercentage !== null && (
-                                <InfoRow label="Proteína" value={`${user.proteinPercentage}%`} />
+                                <InfoRow label="Proteína" value={`${user.proteinPercentage.toLocaleString('pt-BR')}%`} />
                             )}
                         </View>
 

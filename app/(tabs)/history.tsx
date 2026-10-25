@@ -20,13 +20,16 @@ import { WeightRecord } from '../../src/domain/entities/WeightRecord';
 import { WorkoutSession } from '../../src/domain/entities/WorkoutSession';
 import { MealConsumption, MealConsumptionStatus } from '../../src/domain/entities/MealConsumption';
 import { recordWeight } from '../../src/domain/use-cases/weight/RecordWeight';
+import { parseLocalizedDecimal } from '../../src/domain/value-objects/LocalizedDecimal';
 import { formatMealDateInput, formatMealTimeInput, parseMealDateTime } from '../../src/domain/use-cases/meal/MealConsumptionInput';
 import { confirmAsync } from '../../src/ui/utils/dialogs';
+import { useAuth } from '../../src/ui/hooks/useAuth';
 
 type HistoryTab = 'weight' | 'workouts' | 'meals';
 
 export default function HistoryScreen() {
     const { weightRepo, workoutRepo, mealConsumptionRepo, userRepo } = useRepositories();
+    const { session } = useAuth();
     const [activeTab, setActiveTab] = useState<HistoryTab>('weight');
 
     const [weightHistory, setWeightHistory] = useState<WeightRecord[]>([]);
@@ -123,14 +126,22 @@ export default function HistoryScreen() {
     }
 
     async function handleLogWeight() {
-        const kg = parseFloat(weightInput);
-        if (isNaN(kg) || kg <= 0) return;
-        const bf = bodyFatInput ? parseFloat(bodyFatInput) : null;
-        const prot = proteinInput ? parseFloat(proteinInput) : null;
+        const kg = parseLocalizedDecimal(weightInput);
+        const bf = bodyFatInput.trim() ? parseLocalizedDecimal(bodyFatInput) : null;
+        const prot = proteinInput.trim() ? parseLocalizedDecimal(proteinInput) : null;
+        if (kg === null || (bodyFatInput.trim() && bf === null) || (proteinInput.trim() && prot === null)) {
+            setError('Informe números válidos; use vírgula ou ponto como separador decimal.');
+            return;
+        }
+        if (kg <= 0) { setError('O peso deve ser maior que zero'); return; }
+        if ((bf !== null && (bf < 0 || bf > 100)) || (prot !== null && (prot < 0 || prot > 100))) {
+            setError('Percentuais devem estar entre 0 e 100');
+            return;
+        }
         try {
             setSavingWeight(true);
             setError(null);
-            const userId = await userRepo.getCurrentUserId();
+            const userId = session?.user.id ?? await userRepo.getCurrentUserId();
             if (!userId) {
                 setError('É necessário estar logado para registrar peso');
                 return;
@@ -163,8 +174,9 @@ export default function HistoryScreen() {
         if (!editingSet) return;
         const reps = Number(editReps);
         if (!Number.isInteger(reps) || reps < 0) { setError('Repetições inválidas'); return; }
-        const weight = editWeight.trim() ? Number(editWeight.replace(',', '.')) : null;
-        if (weight !== null && (!Number.isFinite(weight) || weight < 0)) { setError('Carga inválida'); return; }
+        const weight = editWeight.trim() ? parseLocalizedDecimal(editWeight) : null;
+        if (editWeight.trim() && weight === null) { setError('Informe uma carga válida'); return; }
+        if (weight !== null && weight < 0) { setError('A carga não pode ser negativa'); return; }
         const session = sessions.find((candidate) => candidate.id === editingSet.sessionId);
         if (!session) return;
         const original = session.sets.find((set) => set.id === editingSet.setId);
@@ -293,7 +305,7 @@ export default function HistoryScreen() {
                                 <Card key={record.id} style={styles.historyCard}>
                                     <View style={styles.historyRow}>
                                         <TypographyText variant="h4" color={Colors.textPrimary}>
-                                            {record.weightKg} kg
+                                            {record.weightKg.toLocaleString('pt-BR')} kg
                                         </TypographyText>
                                         <TypographyText variant="bodySmall" color={Colors.textSecondary}>
                                             {formatDate(record.recordedAt)}
@@ -302,12 +314,12 @@ export default function HistoryScreen() {
                                     <View style={styles.historyRow}>
                                         {record.bodyFatPercentage !== null && (
                                             <TypographyText variant="bodySmall" color={Colors.textSecondary}>
-                                                Gordura: {record.bodyFatPercentage}%
+                                                Gordura: {record.bodyFatPercentage.toLocaleString('pt-BR')}%
                                             </TypographyText>
                                         )}
                                         {record.proteinPercentage !== null && (
                                             <TypographyText variant="bodySmall" color={Colors.textSecondary}>
-                                                Proteína: {record.proteinPercentage}%
+                                                Proteína: {record.proteinPercentage.toLocaleString('pt-BR')}%
                                             </TypographyText>
                                         )}
                                     </View>

@@ -12,6 +12,8 @@ Fluxos exercitados: redirecionamento sem sessão; seis abas; viewport de 390 px;
 
 A sessão autenticada e `/auth/v1/user` foram simulados; dados usam modo local. Google OAuth, Supabase implantado e sincronização real não foram exercitados. Câmera, permissões, Safari/iOS, push, recuperação offline e fluxo LLM também não foram validados.
 
+Validação posterior da trilha de decimais: três fluxos Chromium passaram para perfil pt-BR, cadastro manual de rótulo com decimais por vírgula e registro de peso `74,5 kg`. O fluxo do perfil também verifica exibição localizada; o registro de peso confirmou o valor exibido e salvo como `74,5`, sem truncamento. Isso não altera a contagem da execução histórica acima.
+
 ## Verificação aprofundada de treinos
 
 - Wall sit de 45 s exibiu contagem `00:45`; conclusão manual em 44 s persistiu `durationSeconds: 44`, `repsCompleted: 0` e `weightUsedKg: null` no armazenamento local.
@@ -49,8 +51,8 @@ Dashboard em estado vazio não mostra erro após configurar usuário de teste. T
 | Prioridade | Área | Evidência e impacto |
 |---|---|---|
 | Mitigada localmente | Consumo de refeições | `plan.tsx` agora registra confirmação, pulo, substituição/notas e refeição avulsa; `history.tsx` lista consumos reais com correção e exclusão confirmada. O armazenamento Supabase requer a migration `013_p4_meal_consumptions.sql`; deploy/RLS ainda não verificados. |
-| Alta | Tabela nutricional | Cadastro aceita apenas calorias, proteínas, carboidratos e gorduras. Campo vazio vira `0` e porção vazia vira `100 g`; rótulos incompletos parecem completos e vitaminas/unidades/base não podem ser registradas. [scan.tsx](../app/food/scan.tsx) |
-| Média | Peso decimal pt-BR | `parseFloat("74,5")` salva `74`, sem vírgula decimal. Risco de registro incorreto. [history.tsx](<../app/(tabs)/history.tsx>) |
+| Alta | Tabela nutricional | Parcialmente mitigada: entradas decimais usam parsing estrito e campos vazios/malformados são bloqueados em vez de virarem `0`/`100 g`. Rótulos incompletos ainda não podem ser salvos como incompletos e vitaminas/unidades/base não podem ser registradas; depende do modelo extensível de P5. [scan.tsx](../app/food/scan.tsx) |
+| Mitigada localmente | Peso decimal pt-BR | `74,5` é interpretado e exibido como `74,5 kg`; texto residual e separadores ambíguos são rejeitados. Perfil, correções de carga, cadastro de alimentos e OCR também usam o parser estrito. Cobertura unitária/UI/E2E aprovada localmente; Supabase implantado não foi exercitado. [history.tsx](<../app/(tabs)/history.tsx>) |
 | Média | Medições e meta | Perfil mantém peso atual editável separado do histórico. Dashboard calcula progresso usando esse valor de perfil como referência, sem data inicial da meta; novas medições não são fonte única do progresso. [settings.tsx](<../app/(tabs)/settings.tsx>), [index.tsx](<../app/(tabs)/index.tsx>) |
 | Média | Fuso horário | Perfil não permite configurar/salvar fuso; rotinas recorrem ao fuso do dispositivo. Agendas não seguem requisito de fuso fixo do perfil em viagens. [settings.tsx](<../app/(tabs)/settings.tsx>), [plan.tsx](<../app/(tabs)/plan.tsx>) |
 | Média | Exames | Upload não solicita data do exame; usa título/nome do arquivo e timestamp de upload. Não atende data obrigatória nem metadados necessários para prompt. [settings.tsx](<../app/(tabs)/settings.tsx>) |

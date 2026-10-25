@@ -87,13 +87,20 @@ test.describe('authenticated user flows', () => {
         await page.goto('/settings', { waitUntil: 'domcontentloaded' });
         await page.getByPlaceholder('Seu nome').fill('E2E Athlete');
         await page.getByPlaceholder('DD/MM/AAAA').fill('01011990');
-        await page.getByPlaceholder('175').fill('175');
-        await page.getByPlaceholder('75', { exact: true }).fill('75');
-        await page.getByPlaceholder('70', { exact: true }).fill('70');
+        await page.getByPlaceholder('175').fill('175,5');
+        await page.getByPlaceholder('75', { exact: true }).fill('75,5');
+        await page.getByPlaceholder('70', { exact: true }).fill('70,5');
+        await page.getByPlaceholder('20', { exact: true }).fill('18,5');
+        await page.getByPlaceholder('22').fill('20,5');
         await page.getByPlaceholder('Ex: Perder gordura e ganhar massa').fill('Saúde e condicionamento');
         await page.getByText('Salvar Perfil', { exact: true }).click();
 
         await expect(page.getByText('E2E Athlete', { exact: true })).toBeVisible();
+        await expect(page.getByText('175,5 cm', { exact: true })).toBeVisible();
+        await expect(page.getByText('75,5 kg', { exact: true })).toBeVisible();
+        await expect(page.getByText('70,5 kg', { exact: true })).toBeVisible();
+        await expect(page.getByText('18,5%', { exact: true })).toBeVisible();
+        await expect(page.getByText('20,5%', { exact: true })).toBeVisible();
         await page.screenshot({ path: 'docs/e2e-profile.png', fullPage: true });
         await page.reload();
         await expect(page.getByText('E2E Athlete', { exact: true })).toBeVisible();
@@ -306,15 +313,22 @@ test.describe('authenticated user flows', () => {
         await page.goto('/food/scan', { waitUntil: 'domcontentloaded' });
         await expect(page.getByText('Importar Alimento', { exact: true })).toBeVisible();
         await page.getByPlaceholder('ex: Aveia Quaker').fill('Alimento E2E');
+        await page.getByPlaceholder('100', { exact: true }).fill('12,5');
+        await page.getByPlaceholder('0', { exact: true }).nth(0).fill('123,5');
+        await page.getByPlaceholder('0', { exact: true }).nth(1).fill('2,5');
+        await page.getByPlaceholder('0', { exact: true }).nth(2).fill('10');
+        await page.getByPlaceholder('0', { exact: true }).nth(3).fill('1,5');
         await page.getByText('Salvar Alimento', { exact: true }).click();
 
         await expect(page.getByText('✓ Salvo!', { exact: true })).toBeVisible();
         await page.goto('/nutrition');
         await expect(page.getByText('Alimento E2E', { exact: true })).toBeVisible();
+        await expect(page.getByText('123,5 kcal • P 2,5g • C 10g • G 1,5g', { exact: true })).toBeVisible();
+        await expect(page.getByText('Porção: 12,5 g', { exact: true })).toBeVisible();
     });
 
     test('shows missing nutrition values as incomplete, not zero', async ({ page }) => {
-        test.fail(true, 'Requirement gap: empty nutrient fields are silently stored as zero and serving size defaults to 100 g.');
+        test.fail(true, 'Pending P5: incomplete labels must be saveable with missing values distinct from zero.');
 
         await page.goto('/food/scan', { waitUntil: 'domcontentloaded' });
         await page.getByPlaceholder('ex: Aveia Quaker').fill('Rótulo incompleto E2E');
@@ -339,14 +353,16 @@ test.describe('authenticated user flows', () => {
     });
 
     test('keeps Brazilian decimal precision when logging weight', async ({ page }) => {
-        test.fail(true, 'Requirement gap: history input parses comma decimals with parseFloat.');
-
         await page.goto('/history', { waitUntil: 'domcontentloaded' });
         await page.getByText('+ Registrar Peso', { exact: true }).click();
         await page.getByPlaceholder('Ex: 75.5').fill('74,5');
+        await page.getByPlaceholder('Ex: 18.5').fill('18,5');
+        await page.getByPlaceholder('Ex: 22.0').fill('20,5');
         await page.getByText('Salvar', { exact: true }).click();
 
         await expect(page.getByText('74,5 kg', { exact: true })).toBeVisible();
+        await expect(page.getByText('Gordura: 18,5%', { exact: true })).toBeVisible();
+        await expect(page.getByText('Proteína: 20,5%', { exact: true })).toBeVisible();
     });
 
     test('allows setting the profile timezone', async ({ page }) => {

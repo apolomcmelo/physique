@@ -1,4 +1,5 @@
 import { createWorker } from 'tesseract.js';
+import { parseLocalizedDecimal } from '../../domain/value-objects/LocalizedDecimal';
 
 export interface OcrResult {
     rawText: string;
@@ -16,33 +17,33 @@ export interface OcrResult {
 
 const PATTERNS = {
     calories: [
-        /calorias[^\d]*(\d+(?:[.,]\d+)?)/i,
-        /energia[^\d]*(\d+(?:[.,]\d+)?)\s*kcal/i,
-        /calories?[^\d]*(\d+(?:[.,]\d+)?)/i,
-        /energy[^\d]*(\d+(?:[.,]\d+)?)\s*kcal/i,
-        /valor\s+energ[eé]tico[^\d]*(\d+(?:[.,]\d+)?)/i,
+        /calorias[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])/i,
+        /energia[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*kcal/i,
+        /calories?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])/i,
+        /energy[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*kcal/i,
+        /valor\s+energ[eé]tico[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])/i,
     ],
     proteinGrams: [
-        /prote[ií]nas?[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
-        /proteins?[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
+        /prote[ií]nas?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
+        /proteins?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
     ],
     carbsGrams: [
-        /carboidratos?[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
-        /carbohydrates?[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
-        /total\s+carb[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
-        /(?:a[cç][uú]cares?\s+totais?|total\s+sugars?)[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
+        /carboidratos?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
+        /carbohydrates?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
+        /total\s+carb[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
+        /(?:a[cç][uú]cares?\s+totais?|total\s+sugars?)[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
     ],
     fatGrams: [
-        /gorduras?\s+totais?[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
-        /total\s+fat[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
-        /lipídios?[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
-        /fats?[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
+        /gorduras?\s+totais?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
+        /total\s+fat[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
+        /lipídios?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
+        /fats?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
     ],
     servingSizeGrams: [
-        /por[çc][aã]o[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
-        /serving\s+size[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
-        /por[çc][aã]o\s+de[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
-        /tamanho\s+da\s+por[çc][aã]o[^\d]*(\d+(?:[.,]\d+)?)\s*g/i,
+        /por[çc][aã]o[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
+        /serving\s+size[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
+        /por[çc][aã]o\s+de[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
+        /tamanho\s+da\s+por[çc][aã]o[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
     ],
     ingredients: [
         /ingredientes?[:\s]+([^.]+(?:\.[^.]+)*)/i,
@@ -50,16 +51,12 @@ const PATTERNS = {
     ],
 };
 
-function parseFloat_PTBR(value: string): number {
-    return parseFloat(value.replace(',', '.'));
-}
-
 function extractNumber(text: string, patterns: RegExp[]): number | undefined {
     for (const pattern of patterns) {
         const match = pattern.exec(text);
         if (match?.[1]) {
-            const value = parseFloat_PTBR(match[1]);
-            if (!isNaN(value)) {
+            const value = parseLocalizedDecimal(match[1]);
+            if (value !== null) {
                 return value;
             }
         }

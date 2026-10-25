@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { recognizeNutritionLabel } from '../../src/adapters/ocr/TesseractOcrAdapter';
 import { createFoodItem } from '../../src/domain/entities/FoodItem';
+import { parseLocalizedDecimal } from '../../src/domain/value-objects/LocalizedDecimal';
 import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { Input } from '../../src/ui/components/Input';
@@ -45,11 +46,11 @@ export default function FoodScanScreen() {
         try {
             const { rawText: text, nutritionData } = await recognizeNutritionLabel(uri);
             setRawText(text);
-            if (nutritionData.calories) setCalories(String(nutritionData.calories));
-            if (nutritionData.proteinGrams) setProtein(String(nutritionData.proteinGrams));
-            if (nutritionData.carbsGrams) setCarbs(String(nutritionData.carbsGrams));
-            if (nutritionData.fatGrams) setFat(String(nutritionData.fatGrams));
-            if (nutritionData.servingSizeGrams) setServingSize(String(nutritionData.servingSizeGrams));
+            if (nutritionData.calories !== undefined) setCalories(String(nutritionData.calories));
+            if (nutritionData.proteinGrams !== undefined) setProtein(String(nutritionData.proteinGrams));
+            if (nutritionData.carbsGrams !== undefined) setCarbs(String(nutritionData.carbsGrams));
+            if (nutritionData.fatGrams !== undefined) setFat(String(nutritionData.fatGrams));
+            if (nutritionData.servingSizeGrams !== undefined) setServingSize(String(nutritionData.servingSizeGrams));
             if (nutritionData.ingredients) setIngredients(nutritionData.ingredients);
         } catch {
             await alertAsync('Erro', 'Não foi possível ler o rótulo. Preencha manualmente.');
@@ -105,16 +106,30 @@ export default function FoodScanScreen() {
             await alertAsync('Erro', 'Informe o nome do alimento.');
             return;
         }
+        const servingSizeGrams = parseLocalizedDecimal(servingSize);
+        const parsedCalories = parseLocalizedDecimal(calories);
+        const proteinGrams = parseLocalizedDecimal(protein);
+        const carbsGrams = parseLocalizedDecimal(carbs);
+        const fatGrams = parseLocalizedDecimal(fat);
+        if (servingSizeGrams === null || parsedCalories === null || proteinGrams === null
+            || carbsGrams === null || fatGrams === null) {
+            await alertAsync('Dados incompletos', 'Preencha porção, calorias e macronutrientes. Informe 0 somente quando o valor for realmente zero.');
+            return;
+        }
+        if (servingSizeGrams <= 0 || [parsedCalories, proteinGrams, carbsGrams, fatGrams].some((value) => value < 0)) {
+            await alertAsync('Valores inválidos', 'A porção deve ser maior que zero e os valores nutricionais não podem ser negativos.');
+            return;
+        }
         setLoading(true);
         try {
             const item = createFoodItem({
                 name: name.trim(),
                 brandOrSource: brand.trim() || null,
-                servingSizeGrams: parseFloat(servingSize) || 100,
-                calories: parseFloat(calories) || 0,
-                proteinGrams: parseFloat(protein) || 0,
-                carbsGrams: parseFloat(carbs) || 0,
-                fatGrams: parseFloat(fat) || 0,
+                servingSizeGrams,
+                calories: parsedCalories,
+                proteinGrams,
+                carbsGrams,
+                fatGrams,
                 ingredients: ingredients.trim() || null,
                 rawOcrText: rawText || null,
             });
@@ -188,13 +203,13 @@ export default function FoodScanScreen() {
             <Card style={styles.formCard}>
                 <Text style={styles.sectionTitle}>Tabela Nutricional</Text>
                 <MacroRow label="Calorias" value={calories || '—'} unit="kcal" />
-                <Input label="Calorias (kcal)" value={calories} onChangeText={setCalories} keyboardType="numeric" />
+                <Input label="Calorias (kcal)" value={calories} onChangeText={setCalories} keyboardType="numeric" placeholder="0" />
                 <MacroRow label="Proteínas" value={protein || '—'} unit="g" color={Colors.primary} />
-                <Input label="Proteínas (g)" value={protein} onChangeText={setProtein} keyboardType="numeric" />
+                <Input label="Proteínas (g)" value={protein} onChangeText={setProtein} keyboardType="numeric" placeholder="0" />
                 <MacroRow label="Carboidratos" value={carbs || '—'} unit="g" color={Colors.warning} />
-                <Input label="Carboidratos (g)" value={carbs} onChangeText={setCarbs} keyboardType="numeric" />
+                <Input label="Carboidratos (g)" value={carbs} onChangeText={setCarbs} keyboardType="numeric" placeholder="0" />
                 <MacroRow label="Gorduras" value={fat || '—'} unit="g" color={Colors.secondary} />
-                <Input label="Gorduras (g)" value={fat} onChangeText={setFat} keyboardType="numeric" />
+                <Input label="Gorduras (g)" value={fat} onChangeText={setFat} keyboardType="numeric" placeholder="0" />
                 <Input
                     label="Ingredientes"
                     value={ingredients}

@@ -4,11 +4,13 @@ import { MealConsumption } from '../../src/domain/entities/MealConsumption';
 
 const mockHistory = jest.fn();
 const mockSaveSession = jest.fn(async () => {});
+const mockWeightHistory = jest.fn<Promise<unknown[]>, []>(async () => []);
+const mockSaveWeight = jest.fn(async () => {});
 const mockMealConsumptions = jest.fn<Promise<MealConsumption[]>, []>(async () => []);
 const mockSaveMealConsumption = jest.fn<Promise<void>, [MealConsumption]>(async () => {});
 const mockDeleteMealConsumption = jest.fn(async () => {});
 jest.mock('../../src/ui/hooks/useSupabase', () => ({ useRepositories: () => ({
-    weightRepo: { getWeightHistory: jest.fn(async () => []) },
+    weightRepo: { getWeightHistory: mockWeightHistory, saveWeightRecord: mockSaveWeight },
     workoutRepo: { getWorkoutSessions: mockHistory, saveWorkoutSession: mockSaveSession },
     mealConsumptionRepo: {
         getMealConsumptions: mockMealConsumptions,
@@ -18,13 +20,35 @@ jest.mock('../../src/ui/hooks/useSupabase', () => ({ useRepositories: () => ({
     userRepo: { getCurrentUserId: jest.fn(async () => 'user') },
 }) }));
 jest.mock('../../src/ui/utils/dialogs', () => ({ confirmAsync: jest.fn(async () => true) }));
+jest.mock('../../src/ui/hooks/useAuth', () => ({ useAuth: () => ({ session: null }) }));
 
 const HistoryScreen = require('../(tabs)/history').default;
 
 beforeEach(() => {
     mockHistory.mockResolvedValue([]);
+    mockWeightHistory.mockResolvedValue([]);
+    mockSaveWeight.mockClear();
     mockMealConsumptions.mockResolvedValue([]);
     jest.clearAllMocks();
+});
+
+it('records a pt-BR decimal weight without truncating the fractional part', async () => {
+    const screen = render(<HistoryScreen />);
+    await waitFor(() => screen.getByText('+ Registrar Peso'));
+    fireEvent.press(screen.getByText('+ Registrar Peso'));
+    fireEvent.changeText(screen.getByPlaceholderText('Ex: 75.5'), '74,5');
+    fireEvent.press(screen.getByText('Salvar'));
+    await waitFor(() => expect(mockSaveWeight).toHaveBeenCalledWith(expect.objectContaining({ weightKg: 74.5 })));
+});
+
+it('rejects trailing text instead of saving a truncated weight', async () => {
+    const screen = render(<HistoryScreen />);
+    await waitFor(() => screen.getByText('+ Registrar Peso'));
+    fireEvent.press(screen.getByText('+ Registrar Peso'));
+    fireEvent.changeText(screen.getByPlaceholderText('Ex: 75.5'), '74,5kg');
+    fireEvent.press(screen.getByText('Salvar'));
+    expect(await screen.findByText('Informe números válidos; use vírgula ou ponto como separador decimal.')).toBeTruthy();
+    expect(mockSaveWeight).not.toHaveBeenCalled();
 });
 
 it('shows the recorded workout and performed set values without fetching a deleted workout model', async () => {

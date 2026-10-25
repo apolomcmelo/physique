@@ -116,7 +116,7 @@ export default function NutritionScreen() {
                                 </TypographyText>
 
                                 <TypographyText variant="bodySmall" color={Colors.textDisabled}>
-                                    Porção: {item.servingSizeGrams} g
+                                    Porção: {item.servingSizeGrams.toLocaleString('pt-BR')} g
                                 </TypographyText>
 
                                 {item.ingredients ? (
