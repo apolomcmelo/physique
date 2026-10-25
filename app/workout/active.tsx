@@ -163,7 +163,8 @@ export default function ActiveWorkoutScreen() {
                 session,
                 currentExercise,
                 currentSetNumber,
-                { repsCompleted: Number(actualReps), weightUsedKg: actualWeight.trim() ? Number(actualWeight.replace(',', '.')) : null,
+                { repsCompleted: setDuration !== null ? 0 : Number(actualReps),
+                    weightUsedKg: actualWeight.trim() ? Number(actualWeight.replace(',', '.')) : null,
                     durationSeconds: performedDurationSeconds },
             );
             setSession(updated);
@@ -420,14 +421,14 @@ export default function ActiveWorkoutScreen() {
                                     </TypographyText>
                                 </View>
                             )}
-                            {currentExercise.durationSeconds == null && (
-                                <View style={styles.statBox}>
-                                    <TypographyText variant="label" color={Colors.textDisabled}>
-                                        PESO (previsto: {currentExercise.weightKg ?? 0} kg)
-                                    </TypographyText>
-                                    <TextInput accessibilityLabel="Carga realizada em kg" value={actualWeight} onChangeText={setActualWeight} keyboardType="decimal-pad" style={{ color: Colors.textPrimary, fontSize: 22 }} />
-                                </View>
-                            )}
+                            <View style={styles.statBox}>
+                                <TypographyText variant="label" color={Colors.textDisabled}>
+                                    {currentExercise.durationSeconds != null && currentExercise.weightKg == null
+                                        ? 'CARGA (opcional, kg)'
+                                        : `PESO (previsto: ${currentExercise.weightKg ?? 0} kg)`}
+                                </TypographyText>
+                                <TextInput accessibilityLabel="Carga realizada em kg" value={actualWeight} onChangeText={setActualWeight} keyboardType="decimal-pad" style={{ color: Colors.textPrimary, fontSize: 22 }} />
+                            </View>
                         </View>
 
                         {isWorkoutComplete && setDuration !== null && (

@@ -13,7 +13,7 @@ export async function completeSet(
     if (session.finishedAt || session.status === 'partial') throw new Error('Session already finished');
     if (setNumber !== session.sets.filter((set) => set.exerciseId === exercise.id).length + 1 || setNumber > (exercise.sets ?? 1)) throw new Error('Set out of order');
     if (exercise.durationSeconds !== null && (actual.durationSeconds === null || !Number.isFinite(actual.durationSeconds) || actual.durationSeconds < 0)) throw new Error('Actual duration is required');
-    if (exercise.durationSeconds !== null && (actual.repsCompleted !== 0 || actual.weightUsedKg !== null)) throw new Error('Timed set cannot record repetitions or load');
+    if (exercise.durationSeconds !== null && actual.repsCompleted !== 0) throw new Error('Timed set cannot record repetitions');
     if (exercise.durationSeconds === null && actual.durationSeconds !== null) throw new Error('Repetition set cannot record timed duration');
     if (actual.weightUsedKg !== null && (!Number.isFinite(actual.weightUsedKg) || actual.weightUsedKg < 0)) throw new Error('Weight must not be negative');
 

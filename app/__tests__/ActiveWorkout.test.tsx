@@ -154,6 +154,52 @@ it('records one timed HIT set with elapsed performed time when ended early', asy
     jest.useRealTimers();
 });
 
+async function recordTimedSet(exercise: object, weightInput?: string) {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-25T10:00:00Z'));
+    mockGetWorkout.mockResolvedValue({ ...workout, exercises: [{ ...workout.exercises[0], sets: 1, ...exercise }] });
+    const screen = render(<ActiveWorkoutScreen />);
+    await waitFor(() => screen.getByText('▶ Iniciar Série'));
+    if (weightInput !== undefined) fireEvent.changeText(screen.getByLabelText('Carga realizada em kg'), weightInput);
+    fireEvent.press(screen.getByText('▶ Iniciar Série'));
+    jest.setSystemTime(new Date('2026-09-25T10:00:30Z'));
+    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    return screen;
+}
+
+it('records a bodyweight timed set (wall sit without load) with null weight and no error', async () => {
+    const screen = await recordTimedSet({ repsPerSet: null, weightKg: null, durationSeconds: 45 });
+    expect(screen.getByText('CARGA (opcional, kg)')).toBeTruthy();
+    await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({
+        durationSeconds: 30, repsCompleted: 0, weightUsedKg: null,
+    })] })));
+    expect(screen.queryByText(/^Erro ao registrar série/)).toBeNull();
+    jest.useRealTimers();
+});
+
+it('records a loaded timed set (plank holding a 3 kg plate) typed by the user', async () => {
+    const screen = await recordTimedSet({ repsPerSet: null, weightKg: null, durationSeconds: 45 }, '3');
+    await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({
+        durationSeconds: 30, repsCompleted: 0, weightUsedKg: 3,
+    })] })));
+    expect(screen.queryByText(/^Erro ao registrar série/)).toBeNull();
+    jest.useRealTimers();
+});
+
+it('prefills prescribed load on a timed set, forces reps to 0 and allows removing the load', async () => {
+    const screen = await recordTimedSet({ repsPerSet: 10, weightKg: 3, durationSeconds: 45 });
+    expect(screen.queryByLabelText('Repetições realizadas')).toBeNull();
+    await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({
+        durationSeconds: 30, repsCompleted: 0, weightUsedKg: 3,
+    })] })));
+    jest.useRealTimers();
+    mockSaveSession.mockClear();
+    const cleared = await recordTimedSet({ repsPerSet: 10, weightKg: 3, durationSeconds: 45 }, '');
+    await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({ repsCompleted: 0, weightUsedKg: null })] })));
+    expect(cleared.queryByText(/^Erro ao registrar série/)).toBeNull();
+    jest.useRealTimers();
+});
+
 it('records only the expired timed set and waits for a user action after elapsed rest', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-09-25T10:00:00Z'));

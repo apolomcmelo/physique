@@ -52,11 +52,14 @@ it('requires actual time for a timed set and rejects invalid performed values', 
     await expect(completeSet(repo, current(), workout.exercises[0], 1, { repsCompleted: 10, weightUsedKg: -3, durationSeconds: null })).rejects.toThrow('Weight');
 });
 
-it('rejects a timed set with imaginary repetitions or load', async () => {
+it('rejects repetitions on a timed set but accepts optional load', async () => {
     const { repo, current } = repository();
     const hit = { ...workout.exercises[0], sets: 1, repsPerSet: null, weightKg: null, durationSeconds: 1500 };
     await expect(completeSet(repo, current(), hit, 1, { repsCompleted: 10, weightUsedKg: null, durationSeconds: 1500 })).rejects.toThrow('Timed set');
-    await expect(completeSet(repo, current(), hit, 1, { repsCompleted: 0, weightUsedKg: 20, durationSeconds: 1500 })).rejects.toThrow('Timed set');
+    const loaded = await completeSet(repo, current(), hit, 1, { repsCompleted: 0, weightUsedKg: 3, durationSeconds: 45 });
+    expect(loaded.sets[0]).toMatchObject({ repsCompleted: 0, weightUsedKg: 3, durationSeconds: 45 });
+    const fresh = repository();
+    await expect(completeSet(fresh.repo, fresh.current(), hit, 1, { repsCompleted: 0, weightUsedKg: -1, durationSeconds: 45 })).rejects.toThrow('Weight');
 });
 
 it('does not advance memory state when saving a set fails, and retry uses the same logical set', async () => {
