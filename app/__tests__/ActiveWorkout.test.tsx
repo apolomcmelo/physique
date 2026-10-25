@@ -44,7 +44,7 @@ it('leaves the same set executable after a failed save', async () => {
     const screen = render(<ActiveWorkoutScreen />);
     await waitFor(() => screen.getByText('✓ Terminei a Série'));
     fireEvent.press(screen.getByText('✓ Terminei a Série'));
-    await waitFor(() => screen.getByText('Erro ao registrar série'));
+    await waitFor(() => screen.getByText(/^Erro ao registrar série/));
     expect(screen.queryByText('Finalizar Treino 🏁')).toBeNull();
     expect(screen.getByText('✓ Terminei a Série')).toBeTruthy();
 });
@@ -63,7 +63,7 @@ it('logs timed-set context when persistence fails', async () => {
     jest.setSystemTime(new Date('2026-09-25T10:00:45Z'));
     fireEvent.press(screen.getByText('✓ Terminei a Série'));
 
-    await waitFor(() => screen.getByText('Erro ao registrar série'));
+    await waitFor(() => screen.getByText(/^Erro ao registrar série/));
     expect(logError).toHaveBeenCalledWith('[workout] set completion failed', expect.objectContaining({
         workoutId: 'workout-1',
         sessionId: expect.any(String),

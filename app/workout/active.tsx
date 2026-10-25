@@ -197,7 +197,8 @@ export default function ActiveWorkoutScreen() {
                 actualDurationSeconds: performedDurationSeconds,
                 error: cause,
             });
-            setError('Erro ao registrar série');
+            const detail = cause instanceof Error ? cause.message : String(cause);
+            setError(`Erro ao registrar série: ${detail}`);
         } finally {
             savingSetRef.current = false;
             setSetSaving(false);
