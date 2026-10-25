@@ -27,7 +27,7 @@ Stack declarada em `package.json`: Expo `~52.0.46`, React Native `0.76.9`, React
 | TRE: detalhes, edição, ordem e intervalos | Presente/parcial: `WorkoutDetailModal.tsx`, `WorkoutFormModal.tsx`, `Workout.ts`, ambos `*WorkoutRepository.ts` e migration `006_exercise_intervals_and_order.sql`. | Não recriar componentes/006. Verificar comportamento e conectar intervalos ao motor ativo. |
 | TRE: execução e histórico | Bugs: `app/workout/active.tsx` oferece Finish ao chegar na última série, antes de registrá-la, e usa descanso manual inicial de 90 s. `FinishWorkoutSession.ts` apenas encerra a sessão. | Última série, valores reais editáveis, default 60 s, parcial/retomar/descartar, histórico detalhado e independente da rotina. |
 | TRE/OFF: cronômetros e continuidade | Parcial: `src/ui/hooks/useWorkoutTimer.ts` decrementa callbacks; `src/ui/utils/sound.ts` contém áudio. Recuperação/sincronização de sessão não encontrada. | Tempo decorrido, deadline, cache por conta, outbox/retentativas idempotentes, aviso de conflitos e teste real em navegador. |
-| ALI: consumo alimentar | Pendente: `src/domain/entities/MealPlan.ts` modela plano; `app/(tabs)/history.tsx` mostra `getMealPlanEntries()` como histórico. | Registros de consumo real em texto livre, confirmação, substituições, pulos, refeições avulsas e correções. |
+| ALI: consumo alimentar | Parcial, implementado localmente: `MealPlanEntry` permanece programação; `MealConsumption` armazena snapshots consumidos/pulados separados, e History usa somente registros reais. | Verificar migration/RLS no PostgreSQL de teste e Supabase; avançar ocorrências/fuso e consistência de prompts com os períodos de P2/P7. |
 | OCR: catálogo e rótulos | Parcial/bugs: `src/adapters/ocr/TesseractOcrAdapter.ts`, `FoodItem.ts`, `app/food/scan.tsx`. Campos limitados; zeros ignorados, dados anteriores retidos, `parseFloat` trunca vírgula e açúcares podem substituir carboidratos. | Tabela arbitrária com unidades/bases, revisão editável, desconhecido distinto de zero, arquivo original e disponibilidade para planejamento. |
 | MED: perfil, peso e metas | Parcial: `User.ts`, `WeightRecord.ts`, `SaveUserProfile.ts`, `RecordWeight.ts`, telas Settings/History/Dashboard. Peso do perfil e do histórico divergem. | Fonte única por indicador/data, edições isoladas, múltiplas leituras, metas com baseline datado e estado sem baseline. |
 | FOT: captura e consistência | Parcial/bugs: `app/camera/index.tsx`, `useAccelerometer.ts`, `LevelIndicator.tsx`, `ArePhotosConsistent.ts`. Web pula sensores, captura por picker externo à prévia; luminosidade é nula e ausência pode parecer consistência. | Captura web guiada, detecção/permissões, ausência explícita, comparação orientativa, retrato, galeria mensal e principais. |
@@ -107,12 +107,14 @@ Aceite: série registrada offline sobrevive a reabertura normal; resposta perdid
 
 Requisitos: ALI, MED, HIS. Usa ocorrências de P2.
 
-- [ ] Registrar confirmação alimentar com snapshot textual e horário, pulos, substituições e refeições avulsas; sem cálculo automático nutricional.
+- [x] Registrar confirmação alimentar com snapshot textual e horário, pulos, substituições/notas e refeições avulsas; sem cálculo automático nutricional. Correção, data retroativa e exclusão confirmada disponíveis no histórico.
 - [ ] Histórico de medições é a fonte de verdade por indicador; backdating, edição/exclusão isolada e múltiplas leituras diárias.
 - [ ] Meta com início, alvo e baseline válido; mostrar ausência de baseline sem inventar leitura; preservar metas anteriores.
 - [ ] Valores pt-BR corretamente interpretados e validados; refresh entre telas após mudanças.
 
 Aceite: mudar rotina não reescreve consumo; peso novo não apaga percentual antigo; corrigir data X não afeta Y; vírgula decimal preservada; Dashboard/Profile/exports usam os mesmos valores atuais.
+
+Progresso parcial da trilha ALI: `MealConsumption` e porta própria mantêm o texto/situação/data do consumo fora de `MealPlanEntry`; Plan oferece confirmação rápida, pulo, substituição/notas e refeição avulsa; History permite corrigir e excluir com confirmação; prompts de revisão agora recebem consumos reais, inclusive pulos, em vez do cronograma. Adaptadores local por conta e Supabase usam a migration aditiva `013_p4_meal_consumptions.sql` com RLS por proprietário. Validado: 33 testes focados passaram, `npx tsc --noEmit` passou e o fluxo Playwright de confirmação→histórico passou; migration ainda não foi executada contra PostgreSQL/Supabase. MED e os demais itens P4 continuam pendentes.
 
 ### P5 — Tabela nutricional completa e OCR revisável
 

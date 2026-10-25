@@ -18,18 +18,20 @@ import { Typography as TypographyText } from '../../src/ui/components/Typography
 import { Colors, Spacing, Typography } from '../../src/ui/theme';
 import { WeightRecord } from '../../src/domain/entities/WeightRecord';
 import { WorkoutSession } from '../../src/domain/entities/WorkoutSession';
-import { MealPlanEntry } from '../../src/domain/entities/MealPlan';
+import { MealConsumption, MealConsumptionStatus } from '../../src/domain/entities/MealConsumption';
 import { recordWeight } from '../../src/domain/use-cases/weight/RecordWeight';
+import { formatMealDateInput, formatMealTimeInput, parseMealDateTime } from '../../src/domain/use-cases/meal/MealConsumptionInput';
+import { confirmAsync } from '../../src/ui/utils/dialogs';
 
 type HistoryTab = 'weight' | 'workouts' | 'meals';
 
 export default function HistoryScreen() {
-    const { weightRepo, workoutRepo, mealRepo, userRepo } = useRepositories();
+    const { weightRepo, workoutRepo, mealConsumptionRepo, userRepo } = useRepositories();
     const [activeTab, setActiveTab] = useState<HistoryTab>('weight');
 
     const [weightHistory, setWeightHistory] = useState<WeightRecord[]>([]);
     const [sessions, setSessions] = useState<WorkoutSession[]>([]);
-    const [meals, setMeals] = useState<MealPlanEntry[]>([]);
+    const [meals, setMeals] = useState<MealConsumption[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [editingSet, setEditingSet] = useState<{ sessionId: string; setId: string } | null>(null);
@@ -37,6 +39,13 @@ export default function HistoryScreen() {
     const [editWeight, setEditWeight] = useState('');
     const [editDuration, setEditDuration] = useState('');
     const [editStartedAt, setEditStartedAt] = useState<Record<string, string>>({});
+    const [editingMealId, setEditingMealId] = useState<string | null>(null);
+    const [editMealActivity, setEditMealActivity] = useState('');
+    const [editMealDescription, setEditMealDescription] = useState('');
+    const [editMealNotes, setEditMealNotes] = useState('');
+    const [editMealDate, setEditMealDate] = useState('');
+    const [editMealTime, setEditMealTime] = useState('');
+    const [editMealStatus, setEditMealStatus] = useState<MealConsumptionStatus>('consumed');
 
     // New weight form
     const [showWeightForm, setShowWeightForm] = useState(false);
@@ -55,7 +64,7 @@ export default function HistoryScreen() {
             const [wh, ss, ml] = await Promise.all([
                 weightRepo.getWeightHistory(),
                 workoutRepo.getWorkoutSessions(),
-                mealRepo.getMealPlanEntries(),
+                mealConsumptionRepo.getMealConsumptions(),
             ]);
             setWeightHistory(wh.sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime()));
             setSessions(ss.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()));
@@ -64,6 +73,52 @@ export default function HistoryScreen() {
             setError('Erro ao carregar histórico');
         } finally {
             setLoading(false);
+        }
+    }
+
+    function beginMealCorrection(meal: MealConsumption) {
+        setEditingMealId(meal.id);
+        setEditMealActivity(meal.activity);
+        setEditMealDescription(meal.description);
+        setEditMealNotes(meal.notes ?? '');
+        setEditMealDate(formatMealDateInput(meal.recordedAt));
+        setEditMealTime(formatMealTimeInput(meal.recordedAt));
+        setEditMealStatus(meal.status);
+    }
+
+    async function saveMealCorrection(meal: MealConsumption) {
+        const recordedAt = parseMealDateTime(editMealDate, editMealTime);
+        if (!recordedAt) { setError('Informe uma data e horário válidos (DD/MM/AAAA e HH:MM).'); return; }
+        if (!editMealActivity.trim() || !editMealDescription.trim()) { setError('Informe a refeição e sua descrição.'); return; }
+        const updated: MealConsumption = {
+            ...meal,
+            activity: editMealActivity.trim(),
+            description: editMealDescription.trim(),
+            notes: editMealNotes.trim() || null,
+            recordedAt,
+            status: editMealStatus,
+        };
+        try {
+            await mealConsumptionRepo.saveMealConsumption(updated);
+            setMeals((current) => current.map((entry) => entry.id === updated.id ? updated : entry)
+                .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime()));
+            setEditingMealId(null);
+            setError(null);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'Erro ao corrigir refeição.');
+        }
+    }
+
+    async function deleteMeal(meal: MealConsumption) {
+        const confirmed = await confirmAsync('Excluir registro?', `O registro de ${meal.activity} será removido do histórico.`);
+        if (!confirmed) return;
+        try {
+            await mealConsumptionRepo.deleteMealConsumption(meal.id);
+            setMeals((current) => current.filter((entry) => entry.id !== meal.id));
+            if (editingMealId === meal.id) setEditingMealId(null);
+            setError(null);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'Erro ao excluir refeição.');
         }
     }
 
@@ -322,16 +377,16 @@ export default function HistoryScreen() {
                 {activeTab === 'meals' && (
                     <>
                         {meals.length === 0 ? (
-                            <EmptyState icon="🍽️" title="Sem plano" message="Importe um plano na aba Plano." />
+                            <EmptyState icon="🍽️" title="Sem refeições registradas" message="Registre refeições consumidas ou puladas na aba Plano." />
                         ) : (
                             meals.map((meal) => (
                                 <Card key={meal.id} style={styles.historyCard}>
                                     <View style={styles.historyRow}>
                                         <TypographyText variant="h4" color={Colors.primary}>
-                                            {meal.time}
+                                        {meal.recordedAt.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                                         </TypographyText>
                                         <TypographyText variant="label" color={Colors.textSecondary}>
-                                            {meal.day}
+                                        {meal.status === 'consumed' ? 'Consumida' : 'Pulada'}
                                         </TypographyText>
                                     </View>
                                     <TypographyText variant="h4" color={Colors.textPrimary}>
@@ -340,6 +395,26 @@ export default function HistoryScreen() {
                                     <TypographyText variant="body" color={Colors.textSecondary}>
                                         {meal.description}
                                     </TypographyText>
+                                    {meal.notes && <TypographyText variant="bodySmall" color={Colors.textSecondary}>Notas: {meal.notes}</TypographyText>}
+                                    <View style={styles.mealHistoryActions}>
+                                        <Button label="Corrigir registro" onPress={() => beginMealCorrection(meal)} variant="secondary" />
+                                        <Button label="Excluir registro" onPress={() => void deleteMeal(meal)} variant="danger" />
+                                    </View>
+                                    {editingMealId === meal.id && (
+                                        <View style={styles.formCard}>
+                                        <Input label="Refeição" value={editMealActivity} onChangeText={setEditMealActivity} />
+                                        <Input label="Descrição ou motivo do pulo" value={editMealDescription} onChangeText={setEditMealDescription} multiline />
+                                        <Input label="Notas ou substituição" value={editMealNotes} onChangeText={setEditMealNotes} />
+                                        <Input label="Data (DD/MM/AAAA)" value={editMealDate} onChangeText={setEditMealDate} />
+                                        <Input label="Horário (HH:MM)" value={editMealTime} onChangeText={setEditMealTime} />
+                                        <View style={styles.mealHistoryActions}>
+                                            <Button label="Consumida" onPress={() => setEditMealStatus('consumed')} variant={editMealStatus === 'consumed' ? 'primary' : 'secondary'} />
+                                            <Button label="Pulada" onPress={() => setEditMealStatus('skipped')} variant={editMealStatus === 'skipped' ? 'primary' : 'secondary'} />
+                                        </View>
+                                        <Button label="Salvar correção" onPress={() => void saveMealCorrection(meal)} />
+                                        <Button label="Cancelar" onPress={() => setEditingMealId(null)} variant="ghost" />
+                                        </View>
+                                    )}
                                 </Card>
                             ))
                         )}
@@ -377,5 +452,6 @@ const styles = StyleSheet.create({
     actionBtn: { marginBottom: Spacing.sm },
     formCard: { gap: Spacing.xs, marginBottom: Spacing.sm },
     historyCard: { gap: Spacing.xs },
+    mealHistoryActions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
     historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });

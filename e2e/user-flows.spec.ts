@@ -135,8 +135,6 @@ test.describe('authenticated user flows', () => {
     });
 
     test('offers actual meal-consumption logging for a planned meal', async ({ page }) => {
-        test.fail(true, 'Requirement gap: Plan shows schedule only; no action records a consumed or skipped meal.');
-
         await page.goto('/plan', { waitUntil: 'domcontentloaded' });
         const chooserReady = page.waitForEvent('filechooser');
         await page.getByText('Importar CSV', { exact: true }).click();
@@ -151,7 +149,14 @@ test.describe('authenticated user flows', () => {
         });
         await page.getByText('Confirmar importação', { exact: true }).click();
 
+        await page.getByText('Todos', { exact: true }).click();
         await expect(page.getByText('Comi conforme planejado', { exact: true })).toBeVisible();
+        await page.getByText('Comi conforme planejado', { exact: true }).click();
+        await expect(page.getByText('Registrada hoje: consumida', { exact: true })).toBeVisible();
+        await page.getByText('Histórico', { exact: true }).last().click();
+        await page.getByText('Refeições', { exact: true }).click();
+        await expect(page.getByText('Aveia', { exact: true }).first()).toBeVisible();
+        await expect(page.getByText('Consumida', { exact: true })).toBeVisible();
     });
 
     test('creates and completes a one-set workout', async ({ page }) => {

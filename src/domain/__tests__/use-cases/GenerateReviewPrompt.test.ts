@@ -1,6 +1,7 @@
 import { generateReviewPrompt } from '../../use-cases/prompt/GenerateReviewPrompt';
 import { mockUser, mockWeightRecord } from '../setup';
 import { WorkoutSession } from '../../entities/WorkoutSession';
+import { MealConsumption } from '../../entities/MealConsumption';
 
 const mockWorkoutSession: WorkoutSession = {
     id: 'session-1',
@@ -61,6 +62,23 @@ describe('generateReviewPrompt', () => {
     it('contains workout session count', () => {
         // The summary includes "${s.sets.length} sets completed"
         expect(result).toContain(`${mockWorkoutSession.sets.length} sets completed`);
+    });
+
+    it('includes actual consumed and skipped meals rather than scheduled meal-plan rows', () => {
+        const consumed: MealConsumption = {
+            id: 'meal-1', userId: 'user-1', plannedMealId: 'plan-1',
+            activity: 'Almoço', description: 'Arroz e feijão', notes: 'Porção menor',
+            status: 'consumed', recordedAt: new Date('2026-10-25T12:00:00.000Z'),
+        };
+        const skipped: MealConsumption = {
+            ...consumed, id: 'meal-2', activity: 'Lanche', description: 'Sem fome',
+            notes: null, status: 'skipped', recordedAt: new Date('2026-10-25T15:00:00.000Z'),
+        };
+        const prompt = generateReviewPrompt(mockUser, [], [], [], [consumed, skipped], []);
+        expect(prompt).toContain('Actual Meal Consumption');
+        expect(prompt).toContain('Consumed | Almoço: Arroz e feijão (notes: Porção menor)');
+        expect(prompt).toContain('Skipped | Lanche: Sem fome');
+        expect(prompt).not.toContain('Current Meal Plan');
     });
 
     it('contains CSV header structure and workout rules with rest intervals', () => {

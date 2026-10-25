@@ -2,7 +2,7 @@ import { User, calculateAge } from '../../entities/User';
 import { WeightRecord } from '../../entities/WeightRecord';
 import { WorkoutSession } from '../../entities/WorkoutSession';
 import { Exam } from '../../entities/Exam';
-import { MealPlanEntry } from '../../entities/MealPlan';
+import { MealConsumption } from '../../entities/MealConsumption';
 import { FoodItem } from '../../entities/FoodItem';
 import { CSV_PROMPT_CONTRACT } from '../routine/CsvPromptContract';
 
@@ -11,7 +11,7 @@ export function generateReviewPrompt(
     weightHistory: WeightRecord[],
     workoutSessions: WorkoutSession[],
     exams: Exam[],
-    mealEntries: MealPlanEntry[],
+    mealConsumptions: MealConsumption[],
     foodItems: FoodItem[],
 ): string {
     const calculatedAge = calculateAge(user.dateOfBirth);
@@ -50,11 +50,12 @@ export function generateReviewPrompt(
             .join('\n')
         : 'No workout sessions recorded.';
 
-    const mealPlanSummary = mealEntries.length > 0
-        ? mealEntries
-            .map((e) => `- ${e.day} ${e.time} | ${e.activity}: ${e.description} (${e.biologicalObjective})`)
+    const mealConsumptionSummary = mealConsumptions.length > 0
+        ? [...mealConsumptions]
+            .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())
+            .map((e) => `- ${e.recordedAt.toISOString()} | ${e.status === 'consumed' ? 'Consumed' : 'Skipped'} | ${e.activity}: ${e.description}${e.notes ? ` (notes: ${e.notes})` : ''}`)
             .join('\n')
-        : 'No meal plan entries.';
+        : 'No actual meal consumption or skipped-meal records.';
 
     const examsSummary = exams.length > 0
         ? exams
@@ -88,8 +89,8 @@ ${weightHistorySummary || 'No weight records available.'}
 ## Workout History (Last 7 Sessions)
 ${sessionsSummary}
 
-## Current Meal Plan
-${mealPlanSummary}
+## Actual Meal Consumption
+${mealConsumptionSummary}
 
 ## Medical Exams
 ${examsSummary}

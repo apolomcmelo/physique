@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     ScrollView,
@@ -11,11 +11,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
+import { useAuth } from '../../src/ui/hooks/useAuth';
 import { Card } from '../../src/ui/components/Card';
 import { EmptyState } from '../../src/ui/components/EmptyState';
 import { Typography as TypographyText } from '../../src/ui/components/Typography';
 import { Colors, Spacing } from '../../src/ui/theme';
 import { MealPlanEntry } from '../../src/domain/entities/MealPlan';
+import { MealConsumption, MealConsumptionStatus, createMealConsumption } from '../../src/domain/entities/MealConsumption';
 import { Workout, WorkoutType } from '../../src/domain/entities/Workout';
 import { WorkoutDetailModal } from '../../src/ui/components/WorkoutDetailModal';
 import { Button } from '../../src/ui/components/Button';
@@ -25,6 +27,8 @@ import { validateRoutineCsv, RoutinePreview } from '../../src/domain/use-cases/r
 import { proposeRoutine, RoutineProposal, RoutineState, visibleRoutine } from '../../src/domain/use-cases/routine/RoutineVersions';
 import { LocalRoutineRepository } from '../../src/adapters/local/LocalRoutineRepository';
 import { SupabaseRoutineRepository } from '../../src/adapters/supabase/SupabaseRoutineRepository';
+import { Input } from '../../src/ui/components/Input';
+import { formatMealDateInput, formatMealTimeInput, parseMealDateTime } from '../../src/domain/use-cases/meal/MealConsumptionInput';
 
 interface TimelineItem {
     id: string;
@@ -33,6 +37,7 @@ interface TimelineItem {
     activity: string;
     description: string;
     objective: string | null;
+    kind: 'meal' | 'workout';
 }
 
 const WEEKDAY_LABELS = [
@@ -89,6 +94,7 @@ function workoutToTimelineItem(workout: Workout): TimelineItem {
         activity: WORKOUT_TYPE_LABEL[workout.type],
         description: workout.name,
         objective: null,
+        kind: 'workout',
     };
 }
 
@@ -101,6 +107,7 @@ function buildTimeline(entries: MealPlanEntry[], workouts: Workout[]): TimelineI
             activity: e.activity,
             description: e.description,
             objective: e.biologicalObjective,
+            kind: 'meal' as const,
         })),
         ...workouts.map(workoutToTimelineItem),
     ];
@@ -113,9 +120,17 @@ function buildTimeline(entries: MealPlanEntry[], workouts: Workout[]): TimelineI
     });
 }
 
+function isSameLocalDay(left: Date, right: Date): boolean {
+    return left.getFullYear() === right.getFullYear()
+        && left.getMonth() === right.getMonth()
+        && left.getDate() === right.getDate();
+}
+
 export default function PlanScreen() {
-    const { mealRepo, workoutRepo, userRepo } = useRepositories();
+    const { mealRepo, mealConsumptionRepo, workoutRepo, userRepo } = useRepositories();
+    const { session } = useAuth();
     const [entries, setEntries] = useState<MealPlanEntry[]>([]);
+    const [consumptions, setConsumptions] = useState<MealConsumption[]>([]);
     const [workouts, setWorkouts] = useState<Workout[]>([]);
     const [loading, setLoading] = useState(true);
     const [importing, setImporting] = useState(false);
@@ -127,6 +142,13 @@ export default function PlanScreen() {
     const [viewedVersion, setViewedVersion] = useState<'active' | 'pending'>('active');
     const [editingVersion, setEditingVersion] = useState(false);
     const [timezoneWarning, setTimezoneWarning] = useState<string | null>(null);
+    const [mealForm, setMealForm] = useState<{
+        plannedMealId: string | null; activity: string; description: string; notes: string;
+        date: string; time: string; status: MealConsumptionStatus;
+    } | null>(null);
+    const [savingMeal, setSavingMeal] = useState(false);
+    const consumptionsRef = useRef<MealConsumption[]>([]);
+    const pendingMealKeys = useRef(new Set<string>());
     const routineRepo = process.env.EXPO_PUBLIC_USE_LOCAL_DB === 'true' ? new LocalRoutineRepository() : new SupabaseRoutineRepository();
 
     useEffect(() => {
@@ -136,12 +158,15 @@ export default function PlanScreen() {
     async function loadEntries() {
         try {
             setLoading(true);
-            const [mealEntries, workoutList] = await Promise.all([
+            const [mealEntries, workoutList, mealLogs] = await Promise.all([
                 mealRepo.getMealPlanEntries(),
                 workoutRepo.getWorkouts(),
+                mealConsumptionRepo.getMealConsumptions(),
             ]);
             setEntries(mealEntries);
             setWorkouts(workoutList);
+            setConsumptions(mealLogs);
+            consumptionsRef.current = mealLogs;
             const state = visibleRoutine(await routineRepo.getState(), new Date());
             setRoutineState(state);
             if (!state.active && state.pending) setViewedVersion('pending');
@@ -150,6 +175,101 @@ export default function PlanScreen() {
             setError('Erro ao carregar plano');
         } finally {
             setLoading(false);
+        }
+    }
+
+    function openMealForm(item?: TimelineItem, status: MealConsumptionStatus = 'consumed') {
+        const now = new Date();
+        setMealForm({
+            plannedMealId: item?.kind === 'meal' ? item.id : null,
+            activity: item?.kind === 'meal' ? item.activity : '',
+            description: item?.kind === 'meal' ? item.description : '',
+            notes: '',
+            date: formatMealDateInput(now),
+            time: formatMealTimeInput(now),
+            status,
+        });
+    }
+
+    function saveConsumptionState(record: MealConsumption) {
+        const updated = [
+            ...consumptionsRef.current.filter((existing) => existing.id !== record.id),
+            record,
+        ].sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
+        consumptionsRef.current = updated;
+        setConsumptions(updated);
+    }
+
+    async function saveMealRecord() {
+        if (!mealForm) return;
+        const recordedAt = parseMealDateTime(mealForm.date, mealForm.time);
+        if (!recordedAt) {
+            setError('Informe uma data e horário válidos (DD/MM/AAAA e HH:MM).');
+            return;
+        }
+        if (savingMeal) return;
+        const key = mealForm.plannedMealId
+            ? `${mealForm.plannedMealId}:${recordedAt.getFullYear()}-${recordedAt.getMonth()}-${recordedAt.getDate()}`
+            : null;
+        if (key && pendingMealKeys.current.has(key)) return;
+        if (key) pendingMealKeys.current.add(key);
+        try {
+            setSavingMeal(true);
+            setError(null);
+            const userId = session?.user.id ?? await userRepo.getCurrentUserId();
+            if (!userId) throw new Error('É necessário estar logado para registrar uma refeição.');
+            const consumption = createMealConsumption({
+                userId,
+                plannedMealId: mealForm.plannedMealId,
+                activity: mealForm.activity,
+                description: mealForm.description,
+                notes: mealForm.notes,
+                status: mealForm.status,
+                recordedAt,
+            });
+            const existing = mealForm.plannedMealId
+                ? consumptionsRef.current.find((record) => record.plannedMealId === mealForm.plannedMealId
+                    && isSameLocalDay(record.recordedAt, recordedAt))
+                : undefined;
+            const savedConsumption = existing ? { ...consumption, id: existing.id } : consumption;
+            await mealConsumptionRepo.saveMealConsumption(savedConsumption);
+            saveConsumptionState(savedConsumption);
+            setMealForm(null);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'Erro ao registrar refeição.');
+        } finally {
+            if (key) pendingMealKeys.current.delete(key);
+            setSavingMeal(false);
+        }
+    }
+
+    async function quicklyRecordMeal(item: TimelineItem, status: MealConsumptionStatus) {
+        const recordedAt = new Date();
+        const key = `${item.id}:${recordedAt.getFullYear()}-${recordedAt.getMonth()}-${recordedAt.getDate()}`;
+        if (pendingMealKeys.current.has(key)) return;
+        pendingMealKeys.current.add(key);
+        try {
+            const userId = session?.user.id ?? await userRepo.getCurrentUserId();
+            if (!userId) throw new Error('É necessário estar logado para registrar uma refeição.');
+            const consumption = createMealConsumption({
+                userId,
+                plannedMealId: item.id,
+                activity: item.activity,
+                description: item.description,
+                notes: null,
+                status,
+                recordedAt,
+            });
+            const existing = consumptionsRef.current.find((record) => record.plannedMealId === item.id
+                && isSameLocalDay(record.recordedAt, consumption.recordedAt));
+            const savedConsumption = existing ? { ...consumption, id: existing.id } : consumption;
+            await mealConsumptionRepo.saveMealConsumption(savedConsumption);
+            saveConsumptionState(savedConsumption);
+            setError(null);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'Erro ao registrar refeição.');
+        } finally {
+            pendingMealKeys.current.delete(key);
         }
     }
 
@@ -228,6 +348,7 @@ export default function PlanScreen() {
     const timeline = viewed ? (viewed.rows ?? []).map((row) => ({
         id: row.id ?? String(row.line), day: row.day, time: row.time, activity: row.activity,
         description: row.description, objective: row.focus,
+        kind: (['Calistenia', 'Musculação', 'HIT'].includes(row.activity) ? 'workout' : 'meal') as 'meal' | 'workout',
     })) : buildTimeline(entries, workouts);
     const selectedOrder = dayFilter === 'all' ? null : dayFilter === 'today' ? todayDayOrder() : parseInt(dayFilter, 10);
     const filteredTimeline =
@@ -250,6 +371,9 @@ export default function PlanScreen() {
                         {importing ? 'Importando...' : '↑ CSV'}
                     </TypographyText>
                 </TouchableOpacity>
+            </View>
+            <View style={styles.recordMealAction}>
+                <Button label="Registrar refeição avulsa" onPress={() => openMealForm()} variant="secondary" />
             </View>
             {viewed && <View style={{ paddingHorizontal: Spacing.md }}>
                 <TypographyText variant="bodySmall" color={Colors.textSecondary}>Versão {routineState[viewedVersion] ? viewedVersion : viewed === routineState.active ? 'active' : 'pending'}: {viewed.startsAt.toLocaleString('pt-BR', { timeZone: viewed.timezone })} ({viewed.timezone})</TypographyText>
@@ -275,6 +399,42 @@ export default function PlanScreen() {
                 <Button label={editingVersion ? 'Confirmar edição' : 'Confirmar importação'} onPress={confirmImport} loading={importing} />
                 <Button label="Cancelar prévia" onPress={() => { setPreview(null); setEditingVersion(false); }} />
             </View>}
+            {mealForm && (
+                <ScrollView
+                    style={styles.mealForm}
+                    contentContainerStyle={styles.mealFormContent}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <TypographyText variant="h4" color={Colors.textPrimary}>
+                        {mealForm.plannedMealId ? 'Registrar refeição planejada' : 'Registrar refeição avulsa'}
+                    </TypographyText>
+                    <Input label="Refeição" value={mealForm.activity}
+                        onChangeText={(activity) => setMealForm((current) => current ? { ...current, activity } : current)}
+                        placeholder="Ex: Almoço" />
+                    <Input label="O que comeu ou motivo do pulo" value={mealForm.description}
+                        onChangeText={(description) => setMealForm((current) => current ? { ...current, description } : current)}
+                        placeholder="Descrição da refeição" multiline />
+                    <Input label="Notas ou substituição" value={mealForm.notes}
+                        onChangeText={(notes) => setMealForm((current) => current ? { ...current, notes } : current)}
+                        placeholder="Opcional" />
+                    <Input label="Data (DD/MM/AAAA)" value={mealForm.date}
+                        onChangeText={(date) => setMealForm((current) => current ? { ...current, date } : current)}
+                        placeholder="DD/MM/AAAA" />
+                    <Input label="Horário (HH:MM)" value={mealForm.time}
+                        onChangeText={(time) => setMealForm((current) => current ? { ...current, time } : current)}
+                        placeholder="HH:MM" />
+                    <View style={styles.mealFormActions}>
+                        <Button label="Consumida"
+                            onPress={() => setMealForm((current) => current ? { ...current, status: 'consumed' } : current)}
+                            variant={mealForm.status === 'consumed' ? 'primary' : 'secondary'} />
+                        <Button label="Pulada"
+                            onPress={() => setMealForm((current) => current ? { ...current, status: 'skipped' } : current)}
+                            variant={mealForm.status === 'skipped' ? 'primary' : 'secondary'} />
+                        <Button label="Salvar registro" onPress={saveMealRecord} loading={savingMeal} />
+                        <Button label="Cancelar" onPress={() => setMealForm(null)} variant="secondary" />
+                    </View>
+                </ScrollView>
+            )}
 
             <ScrollView
                 horizontal
@@ -321,7 +481,7 @@ export default function PlanScreen() {
                         <Card
                             key={item.id}
                             style={styles.entryCard}
-                            onPress={() => {
+                            onPress={item.kind === 'workout' ? () => {
                                 const rowIndex = viewed?.rows?.findIndex((row) => row.id === item.id) ?? -1;
                                 const workoutIndex = rowIndex < 0 ? -1 : viewed!.rows!.slice(0, rowIndex + 1).filter((row) => ['Calistenia', 'Musculação', 'HIT'].includes(row.activity)).length - 1;
                                 const workout = viewed
@@ -329,7 +489,7 @@ export default function PlanScreen() {
                                         ? viewed.workouts[workoutIndex] : undefined
                                     : workouts.find((candidate) => candidate.id === item.id);
                                 if (workout) setSelectedWorkout(workout);
-                            }}
+                            } : undefined}
                         >
                             <View style={styles.entryHeader}>
                                 <TypographyText variant="h4" color={Colors.primary}>
@@ -354,6 +514,23 @@ export default function PlanScreen() {
                                     {item.objective}
                                 </TypographyText>
                             ) : null}
+                            {item.kind === 'meal' && (
+                                <View style={styles.mealActions}>
+                                    {consumptions.find((record) => record.plannedMealId === item.id
+                                        && isSameLocalDay(record.recordedAt, new Date())) && (
+                                        <TypographyText variant="bodySmall" color={Colors.success}>
+                                            Registrada hoje: {consumptions.find((record) => record.plannedMealId === item.id
+                                                && isSameLocalDay(record.recordedAt, new Date()))?.status === 'consumed' ? 'consumida' : 'pulada'}
+                                        </TypographyText>
+                                    )}
+                                    <Button label="Comi conforme planejado"
+                                        onPress={() => void quicklyRecordMeal(item, 'consumed')} />
+                                    <Button label="Pular refeição"
+                                        onPress={() => void quicklyRecordMeal(item, 'skipped')} variant="ghost" />
+                                    <Button label="Substituir ou adicionar nota"
+                                        onPress={() => openMealForm(item)} variant="secondary" />
+                                </View>
+                            )}
                         </Card>
                     ))}
                 </ScrollView>
@@ -409,6 +586,11 @@ const styles = StyleSheet.create({
     list: { flex: 1 },
     listContent: { padding: Spacing.md, gap: Spacing.sm },
     entryCard: { gap: 2, overflow: 'hidden' },
+    recordMealAction: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
+    mealForm: { flexGrow: 0, maxHeight: 360, marginHorizontal: Spacing.md, marginBottom: Spacing.sm, borderRadius: 8, backgroundColor: Colors.surface },
+    mealFormContent: { padding: Spacing.md, gap: Spacing.sm },
+    mealFormActions: { gap: Spacing.xs },
+    mealActions: { gap: Spacing.xs, marginTop: Spacing.sm },
     entryHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',

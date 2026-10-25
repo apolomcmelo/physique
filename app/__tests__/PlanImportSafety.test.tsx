@@ -1,8 +1,15 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { MealConsumption } from '../../src/domain/entities/MealConsumption';
 
 
 const mockSaveMeals = jest.fn();
+const mockSaveMealConsumption = jest.fn<Promise<void>, [MealConsumption]>(async () => {});
+const mockGetMealConsumptions = jest.fn(async () => []);
+const mockGetPlannedMeals = jest.fn(async () => [{
+    id: 'meal-1', day: 'Domingo', time: '12:00', activity: 'Almoço',
+    description: 'Arroz e feijão', biologicalObjective: 'Energia',
+}]);
 const mockSaveWorkout = jest.fn();
 const mockParseWorkouts = jest.fn();
 const mockGetDocument = jest.fn();
@@ -26,10 +33,17 @@ jest.mock('../../src/domain/use-cases/meal/ParseCsvMealPlan', () => ({ parseCsvM
 jest.mock('../../src/domain/use-cases/workout/ParseCsvWorkouts', () => ({ parseCsvWorkouts: (...args: unknown[]) => mockParseWorkouts(...args) }));
 jest.mock('../../src/ui/hooks/useSupabase', () => ({
     useRepositories: () => ({
-        mealRepo: { getMealPlanEntries: jest.fn(async () => []), saveMealPlanEntries: mockSaveMeals },
+        mealRepo: { getMealPlanEntries: mockGetPlannedMeals, saveMealPlanEntries: mockSaveMeals },
+        mealConsumptionRepo: {
+            getMealConsumptions: mockGetMealConsumptions,
+            saveMealConsumption: mockSaveMealConsumption,
+        },
         workoutRepo: { getWorkouts: jest.fn(async () => []), saveWorkout: mockSaveWorkout },
-        userRepo: { getUser: mockGetUser },
+        userRepo: { getUser: mockGetUser, getCurrentUserId: jest.fn(async () => 'user-1') },
     }),
+}));
+jest.mock('../../src/ui/hooks/useAuth', () => ({
+    useAuth: () => ({ session: { user: { id: 'user-1' } } }),
 }));
 
 const PlanScreen = require('../(tabs)/plan').default;
@@ -121,4 +135,43 @@ it('does not save when the user cancels the preview', async () => {
     fireEvent.press(screen.getByText('Cancelar prévia'));
     expect(screen.queryByText('Confirmar importação')).toBeNull();
     expect(mockConfirmRoutine).not.toHaveBeenCalled();
+});
+
+it('logs a planned meal as a timestamped consumption snapshot', async () => {
+    mockSaveMealConsumption.mockClear();
+    const screen = render(<PlanScreen />);
+    await waitFor(() => screen.getByText('Todos', { exact: true }));
+    fireEvent.press(screen.getByText('Todos', { exact: true }));
+    fireEvent.press(screen.getByText('Comi conforme planejado', { exact: true }));
+    fireEvent.press(screen.getByText('Comi conforme planejado', { exact: true }));
+    await waitFor(() => expect(mockSaveMealConsumption).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 'user-1',
+        plannedMealId: 'meal-1',
+        activity: 'Almoço',
+        description: 'Arroz e feijão',
+        status: 'consumed',
+        recordedAt: expect.any(Date),
+    })));
+    expect(mockSaveMealConsumption).toHaveBeenCalledTimes(1);
+    const firstId = mockSaveMealConsumption.mock.calls[0][0].id;
+    await waitFor(() => expect(screen.getByText('Registrada hoje: consumida')).toBeTruthy());
+    fireEvent.press(screen.getByText('Comi conforme planejado', { exact: true }));
+    await waitFor(() => expect(mockSaveMealConsumption).toHaveBeenCalledTimes(2));
+    expect(mockSaveMealConsumption.mock.calls[1][0].id).toBe(firstId);
+});
+
+it('allows recording an unplanned meal', async () => {
+    mockSaveMealConsumption.mockClear();
+    const screen = render(<PlanScreen />);
+    await waitFor(() => screen.getByText('Registrar refeição avulsa'));
+    fireEvent.press(screen.getByText('Registrar refeição avulsa'));
+    fireEvent.changeText(screen.getByPlaceholderText('Ex: Almoço'), 'Lanche');
+    fireEvent.changeText(screen.getByPlaceholderText('Descrição da refeição'), 'Iogurte');
+    fireEvent.press(screen.getByText('Salvar registro'));
+    await waitFor(() => expect(mockSaveMealConsumption).toHaveBeenCalledWith(expect.objectContaining({
+        plannedMealId: null,
+        activity: 'Lanche',
+        description: 'Iogurte',
+        status: 'consumed',
+    })));
 });

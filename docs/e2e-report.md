@@ -6,6 +6,8 @@ Execução em Chromium no Expo Web, em 25/10/2026. Sem alterações em código d
 
 `npx playwright test`: **11 fluxos passam; 7 lacunas de requisito reproduzidas e marcadas como falhas esperadas** com `test.fail` para distingui-las de regressões inesperadas. Playwright reporta esses casos esperados como testes aceitos, não como aprovações funcionais.
 
+Atualização da implementação ALI: o fluxo de registrar uma refeição planejada como consumida e encontrá-la no histórico foi implementado e validado com `npx playwright test -g "actual meal-consumption"` (1 fluxo passou em modo local). Portanto, a contagem acima é o resultado histórico da execução inicial, não o estado atual completo. A tabela abaixo deve ser lida com a linha ALI como mitigada localmente; os outros gaps e a integração com Supabase implantado ainda não foram reexecutados/validados nesta atualização.
+
 Fluxos exercitados: redirecionamento sem sessão; seis abas; viewport de 390 px; criação e persistência de perfil; prévia/cancelamento e rejeição de CSV inválido; criação e conclusão de treino de uma série; exercício cronometrado Wall sit; descansos entre séries e entre exercícios; descanso configurado como zero; cadastro manual de alimento.
 
 A sessão autenticada e `/auth/v1/user` foram simulados; dados usam modo local. Google OAuth, Supabase implantado e sincronização real não foram exercitados. Câmera, permissões, Safari/iOS, push, recuperação offline e fluxo LLM também não foram validados.
@@ -46,7 +48,7 @@ Dashboard em estado vazio não mostra erro após configurar usuário de teste. T
 
 | Prioridade | Área | Evidência e impacto |
 |---|---|---|
-| Alta | Consumo de refeições | Plano só exibe agenda; não oferece “comi conforme planejado”, substituição, pulo nem registro histórico. Requisito ALI sem fluxo implementado em [plan.tsx](<../app/(tabs)/plan.tsx>) e [history.tsx](<../app/(tabs)/history.tsx>). |
+| Mitigada localmente | Consumo de refeições | `plan.tsx` agora registra confirmação, pulo, substituição/notas e refeição avulsa; `history.tsx` lista consumos reais com correção e exclusão confirmada. O armazenamento Supabase requer a migration `013_p4_meal_consumptions.sql`; deploy/RLS ainda não verificados. |
 | Alta | Tabela nutricional | Cadastro aceita apenas calorias, proteínas, carboidratos e gorduras. Campo vazio vira `0` e porção vazia vira `100 g`; rótulos incompletos parecem completos e vitaminas/unidades/base não podem ser registradas. [scan.tsx](../app/food/scan.tsx) |
 | Média | Peso decimal pt-BR | `parseFloat("74,5")` salva `74`, sem vírgula decimal. Risco de registro incorreto. [history.tsx](<../app/(tabs)/history.tsx>) |
 | Média | Medições e meta | Perfil mantém peso atual editável separado do histórico. Dashboard calcula progresso usando esse valor de perfil como referência, sem data inicial da meta; novas medições não são fonte única do progresso. [settings.tsx](<../app/(tabs)/settings.tsx>), [index.tsx](<../app/(tabs)/index.tsx>) |

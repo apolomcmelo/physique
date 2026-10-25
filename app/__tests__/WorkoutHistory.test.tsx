@@ -1,16 +1,31 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { MealConsumption } from '../../src/domain/entities/MealConsumption';
 
 const mockHistory = jest.fn();
 const mockSaveSession = jest.fn(async () => {});
+const mockMealConsumptions = jest.fn<Promise<MealConsumption[]>, []>(async () => []);
+const mockSaveMealConsumption = jest.fn<Promise<void>, [MealConsumption]>(async () => {});
+const mockDeleteMealConsumption = jest.fn(async () => {});
 jest.mock('../../src/ui/hooks/useSupabase', () => ({ useRepositories: () => ({
     weightRepo: { getWeightHistory: jest.fn(async () => []) },
     workoutRepo: { getWorkoutSessions: mockHistory, saveWorkoutSession: mockSaveSession },
-    mealRepo: { getMealPlanEntries: jest.fn(async () => []) },
+    mealConsumptionRepo: {
+        getMealConsumptions: mockMealConsumptions,
+        saveMealConsumption: mockSaveMealConsumption,
+        deleteMealConsumption: mockDeleteMealConsumption,
+    },
     userRepo: { getCurrentUserId: jest.fn(async () => 'user') },
 }) }));
+jest.mock('../../src/ui/utils/dialogs', () => ({ confirmAsync: jest.fn(async () => true) }));
 
 const HistoryScreen = require('../(tabs)/history').default;
+
+beforeEach(() => {
+    mockHistory.mockResolvedValue([]);
+    mockMealConsumptions.mockResolvedValue([]);
+    jest.clearAllMocks();
+});
 
 it('shows the recorded workout and performed set values without fetching a deleted workout model', async () => {
     mockHistory.mockResolvedValue([{ id: 'session-1', workoutId: 'deleted-workout', workoutName: 'Peito',
@@ -71,4 +86,40 @@ it('allows correction of the performed seconds of a historical timed set', async
     fireEvent.changeText(screen.getByDisplayValue('1410'), '1400');
     fireEvent.press(screen.getByText('Salvar correção'));
     await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({ durationSeconds: 1400, prescribedDurationSeconds: 1500 })] })));
+});
+
+it('shows actual meal history and saves corrections independently from the plan', async () => {
+    mockMealConsumptions.mockResolvedValue([{
+        id: 'meal-log-1', userId: 'user', plannedMealId: 'plan-1', activity: 'Almoço',
+        description: 'Arroz', notes: null, status: 'consumed', recordedAt: new Date(2026, 9, 25, 12, 30),
+    }]);
+    mockSaveMealConsumption.mockClear();
+    const screen = render(<HistoryScreen />);
+    await waitFor(() => screen.getByText('Refeições'));
+    fireEvent.press(screen.getByText('Refeições'));
+    expect(screen.getByText('Arroz')).toBeTruthy();
+    fireEvent.press(screen.getByText('Corrigir registro'));
+    fireEvent.changeText(screen.getByDisplayValue('Arroz'), 'Arroz e feijão');
+    fireEvent.changeText(screen.getByDisplayValue('25/10/2026'), '24/10/2026');
+    fireEvent.press(screen.getByText('Salvar correção'));
+    await waitFor(() => expect(mockSaveMealConsumption).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'meal-log-1',
+        plannedMealId: 'plan-1',
+        description: 'Arroz e feijão',
+        recordedAt: expect.any(Date),
+    })));
+    expect(mockSaveMealConsumption.mock.calls[0][0].recordedAt.getDate()).toBe(24);
+});
+
+it('deletes a meal record only after explicit confirmation', async () => {
+    mockMealConsumptions.mockResolvedValue([{
+        id: 'meal-log-2', userId: 'user', plannedMealId: null, activity: 'Lanche',
+        description: 'Fruta', notes: null, status: 'consumed', recordedAt: new Date(),
+    }]);
+    mockDeleteMealConsumption.mockClear();
+    const screen = render(<HistoryScreen />);
+    await waitFor(() => screen.getByText('Refeições'));
+    fireEvent.press(screen.getByText('Refeições'));
+    fireEvent.press(screen.getByText('Excluir registro'));
+    await waitFor(() => expect(mockDeleteMealConsumption).toHaveBeenCalledWith('meal-log-2'));
 });

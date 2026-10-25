@@ -34,7 +34,7 @@ import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Radius, Spacing, Typography } from '../../src/ui/theme';
 
 export default function SettingsScreen() {
-    const { userRepo, examRepo, weightRepo, workoutRepo, mealRepo, foodRepo } = useRepositories();
+    const { userRepo, examRepo, weightRepo, workoutRepo, mealConsumptionRepo, foodRepo } = useRepositories();
     const { session, signOut } = useAuth();
 
     const [user, setUser] = useState<User | null>(null);
@@ -191,7 +191,7 @@ export default function SettingsScreen() {
                 weightRepo.getWeightHistory(),
                 workoutRepo.getWorkoutSessions(),
                 examRepo.getExams(),
-                mealRepo.getMealPlanEntries(),
+                mealConsumptionRepo.getMealConsumptions(),
                 foodRepo.getFoodItems(),
             ]);
             const text = generateReviewPrompt(user, weightHistory, sessions, examsList, mealEntries, foodItems);
