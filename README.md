@@ -46,12 +46,16 @@ Workout execution now records the last set before Finish, accepts performed reps
 | `npm run web` | Start Expo for web development. |
 | `npm run test:domain` | Run domain tests only using `jest.domain.config.js`. |
 | `npm test -- --runInBand` | Run the full configured Jest suite. |
+| `npx playwright install chromium` | Install Chromium for browser tests (once per machine). |
+| `npm run test:e2e` | Run Playwright browser flows against Expo Web on port 8081. |
 | `npx tsc --noEmit` | Check TypeScript without emitting application files. |
 | `npx expo export --platform web` | Export web assets without invoking the migration runner. |
 | `npm run migrate` | Apply numbered SQL migrations to the database in `SUPABASE_DB_URL`. |
 | `npm run build` | **Run migrations, then export web assets.** |
 
 The full Jest configuration uses `setupFilesAfterEnv`, and its native matcher setup has a regression test. On 25/09/2026, `npm ci` removed and reinstalled the repository's existing `node_modules` from the new lockfile; the domain suite passed (115 tests), the full Jest suite passed (169 tests), `npx tsc --noEmit` passed, and `npx expo export --platform web` exported 24 static routes. The latter checks require explicit `@types/react-test-renderer` and `query-string` dependencies. The lockfile records resolved packages, but does not pin the Node/npm runtime or prove deployed services and browsers. No lint script is declared.
+
+The browser suite uses isolated local data and a stubbed authenticated user; it does not validate deployed Google OAuth or Supabase. Its findings and desktop screenshots are in [the E2E report](docs/e2e-report.md).
 
 `scripts/migrate.js` reads `.env.local`, tracks applied files in `schema_migrations`, and runs each numbered file from `src/infrastructure/supabase/migrations/` in its own transaction. A failure rolls back that file, not earlier migrations. Use an identified test database for migration verification; an existing schema without the runner's history may need reconciliation before running the initial migration.
 

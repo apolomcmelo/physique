@@ -13,7 +13,8 @@
     "test": "jest --watchAll=false",
     "test:watch": "jest --watchAll",
     "test:coverage": "jest --coverage",
-    "test:domain": "jest --config jest.domain.config.js --no-coverage"
+    "test:domain": "jest --config jest.domain.config.js --no-coverage",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@babel/types": "^7.29.7",
@@ -56,6 +57,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@playwright/test": "^1.64.1",
     "@testing-library/jest-native": "^5.4.3",
     "@testing-library/react-native": "^12.4.0",
     "@types/jest": "^29.5.14",
@@ -78,6 +80,7 @@
     "preset": "jest-expo",
     "testPathIgnorePatterns": [
       "<rootDir>/node_modules/",
+      "<rootDir>/e2e/",
       "<rootDir>/src/domain/__tests__/setup.ts"
     ],
     "setupFilesAfterEnv": [
