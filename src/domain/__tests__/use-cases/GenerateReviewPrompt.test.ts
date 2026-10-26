@@ -2,6 +2,7 @@ import { generateReviewPrompt } from '../../use-cases/prompt/GenerateReviewPromp
 import { mockUser, mockWeightRecord } from '../setup';
 import { WorkoutSession } from '../../entities/WorkoutSession';
 import { MealConsumption } from '../../entities/MealConsumption';
+import { createFoodItem } from '../../entities/FoodItem';
 
 const mockWorkoutSession: WorkoutSession = {
     id: 'session-1',
@@ -93,6 +94,31 @@ describe('generateReviewPrompt', () => {
         expect(prompt).toContain('Consumed | Almoço: Arroz e feijão (notes: Porção menor)');
         expect(prompt).toContain('Skipped | Lanche: Sem fome');
         expect(prompt).not.toContain('Current Meal Plan');
+    });
+
+    it('includes the complete nutrition table only for foods enabled for planning', () => {
+        const food = createFoodItem({
+            name: 'Rótulo completo',
+            brandOrSource: null,
+            nutritionColumns: [{ id: '100ml', label: 'Por 100 ml', basisAmount: 100, basisUnit: 'ml' }],
+            nutrients: [{
+                id: 'sodium',
+                label: 'Sódio',
+                values: [{
+                    columnId: '100ml', amount: 0, unit: 'mg', dailyValuePercent: 0,
+                    certainty: 'confirmed', origin: 'label',
+                }],
+            }],
+            ingredients: null,
+            rawOcrText: null,
+            originalImagePath: null,
+            availableForPlanning: true,
+        });
+        const disabled = { ...food, id: 'disabled', name: 'Not available', availableForPlanning: false };
+        const prompt = generateReviewPrompt(mockUser, [], [], [], [], [food, disabled]);
+
+        expect(prompt).toContain('Sódio: 0 mg, 0% daily value per Por 100 ml (100 ml)');
+        expect(prompt).not.toContain('Not available');
     });
 
     it('contains CSV header structure and workout rules with rest intervals', () => {

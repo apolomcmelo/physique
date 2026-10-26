@@ -2,6 +2,7 @@ import { User, calculateAge } from '../../entities/User';
 import { WeightRecord } from '../../entities/WeightRecord';
 import { Exam } from '../../entities/Exam';
 import { FoodItem } from '../../entities/FoodItem';
+import { formatFoodNutritionForPrompt } from '../food/FormatFoodNutrition';
 import { CSV_PROMPT_CONTRACT } from '../routine/CsvPromptContract';
 
 export function generateNewPlanPrompt(
@@ -24,9 +25,9 @@ export function generateNewPlanPrompt(
         .slice(0, 3);
 
     const foodSummary = foodItems
+        .filter((food) => food.availableForPlanning)
         .map(
-            (f) =>
-                `- ${f.name}${f.brandOrSource ? ` (${f.brandOrSource})` : ''}: ${f.calories}kcal, ${f.proteinGrams}g protein, ${f.carbsGrams}g carbs, ${f.fatGrams}g fat per ${f.servingSizeGrams}g serving`,
+            formatFoodNutritionForPrompt,
         )
         .join('\n');
 

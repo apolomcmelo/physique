@@ -343,29 +343,57 @@ test.describe('authenticated user flows', () => {
         await page.goto('/food/scan', { waitUntil: 'domcontentloaded' });
         await expect(page.getByText('Importar Alimento', { exact: true })).toBeVisible();
         await page.getByPlaceholder('ex: Aveia Quaker').fill('Alimento E2E');
-        await page.getByPlaceholder('100', { exact: true }).fill('12,5');
-        await page.getByPlaceholder('0', { exact: true }).nth(0).fill('123,5');
-        await page.getByPlaceholder('0', { exact: true }).nth(1).fill('2,5');
-        await page.getByPlaceholder('0', { exact: true }).nth(2).fill('10');
-        await page.getByPlaceholder('0', { exact: true }).nth(3).fill('1,5');
+        await page.getByPlaceholder('Por porção, por 100 g, por 100 ml...').fill('Porção');
+        await page.getByPlaceholder('Desconhecida').fill('12,5');
+        await page.getByPlaceholder('g, ml...').fill('g');
+        await page.getByPlaceholder('Valor 1').fill('123,5');
+        await page.getByPlaceholder('Valor 2').fill('2,5');
+        await page.getByPlaceholder('Valor 3').fill('10');
+        await page.getByPlaceholder('Valor 4').fill('1,5');
+        await page.getByText('+ Adicionar nutriente', { exact: true }).click();
+        await page.getByPlaceholder('Ex.: Vitamina C, Sódio, Açúcares totais').last().fill('Vitamina C');
+        await page.getByPlaceholder('Valor 5').fill('12');
+        await page.getByPlaceholder('g, mg, µg, kcal...').nth(0).fill('kcal');
+        await page.getByPlaceholder('g, mg, µg, kcal...').nth(1).fill('g');
+        await page.getByPlaceholder('g, mg, µg, kcal...').nth(2).fill('g');
+        await page.getByPlaceholder('g, mg, µg, kcal...').nth(3).fill('g');
+        await page.getByPlaceholder('g, mg, µg, kcal...').nth(4).fill('mg');
+        await page.getByPlaceholder('% VD').nth(4).fill('20');
+        await page.getByPlaceholder('Farinha de aveia, sal...').fill('Aveia integral, vitamina C');
         await page.getByText('Salvar Alimento', { exact: true }).click();
 
         await expect(page.getByText('✓ Salvo!', { exact: true })).toBeVisible();
         await page.goto('/nutrition');
         await expect(page.getByText('Alimento E2E', { exact: true })).toBeVisible();
-        await expect(page.getByText('123,5 kcal • P 2,5g • C 10g • G 1,5g', { exact: true })).toBeVisible();
+        await expect(page.getByText('Energia 123,5 kcal • P 2,5g • C 10g • G 1,5g', { exact: true })).toBeVisible();
         await expect(page.getByText('Porção: 12,5 g', { exact: true })).toBeVisible();
+        await expect(page.getByText('Vitamina C: 12 mg (20% VD)', { exact: false })).toBeVisible();
+        await expect(page.getByText('Ingredientes: Aveia integral, vitamina C', { exact: true })).toBeVisible();
+        await expect(page.getByText('Disponível para planejamento', { exact: true })).toBeVisible();
+
+        await page.getByText('Corrigir rótulo', { exact: true }).click();
+        await expect(page.getByText('Corrigir Alimento', { exact: true })).toBeVisible();
+        await page.getByPlaceholder('Valor 5').fill('15');
+        await page.getByText('Salvar Correções', { exact: true }).click();
+        await expect(page.getByText('✓ Salvo!', { exact: true })).toBeVisible();
+        await page.goBack();
+        await expect(page.getByText('Vitamina C: 15 mg (20% VD)', { exact: false })).toBeVisible();
     });
 
     test('shows missing nutrition values as incomplete, not zero', async ({ page }) => {
-        test.fail(true, 'Pending P5: incomplete labels must be saveable with missing values distinct from zero.');
-
-        await page.goto('/food/scan', { waitUntil: 'domcontentloaded' });
-        await page.getByPlaceholder('ex: Aveia Quaker').fill('Rótulo incompleto E2E');
+        await page.goto('/', { waitUntil: 'domcontentloaded' });
+        await expect(page.getByText('Physique', { exact: true })).toBeVisible();
+        await page.goto('/food/scan', { waitUntil: 'networkidle' });
+        await expect(page.getByText('Importar Alimento', { exact: true })).toBeVisible();
+        const nameInput = page.getByPlaceholder('ex: Aveia Quaker');
+        await nameInput.fill('Rótulo incompleto E2E');
+        await expect(nameInput).toHaveValue('Rótulo incompleto E2E');
         await page.getByText('Salvar Alimento', { exact: true }).click();
+        await expect(page.getByText('✓ Salvo!', { exact: true })).toBeVisible();
         await page.goto('/nutrition');
 
-        await expect(page.getByText('Incompleto', { exact: true })).toBeVisible();
+        await expect(page.getByText(/Tabela incompleta ou com valores incertos/)).toBeVisible();
+        await expect(page.getByText('Calorias: Desconhecido', { exact: true })).toBeVisible();
     });
 
     test('associates visible nutrition labels with their input fields', async ({ page }) => {

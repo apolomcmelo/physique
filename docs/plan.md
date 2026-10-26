@@ -126,13 +126,15 @@ Progresso MED/P4: registros datados agora são a fonte para o valor mais recente
 
 Requisitos: OCR; dados para LLM.
 
-- [ ] Modelo extensível de linhas/colunas/unidades/bases/valor diário, com imagem/texto original e campo disponível para planejamento.
-- [ ] OCR preenche revisão editável, distingue zero/ausente/incerto e não carrega valores do produto anterior.
-- [ ] Normalização somente com conversão conhecida; preservar dados originais e identificar calculados.
-- [ ] Corrigir açúcar/carboidrato, leitura de colunas, vírgulas e defaults artificiais; migração preserva catálogo atual.
-- [ ] Correções de transcrição e novo registro para formulação diferente; todos os alimentos habilitados alimentam prompts.
+- [x] Modelo extensível de linhas/colunas/unidades/bases/valor diário, com imagem/texto original e campo disponível para planejamento.
+- [x] OCR preenche revisão editável, distingue zero/ausente/incerto e não carrega valores do produto anterior.
+- [x] Normalização somente com conversão conhecida; preservar dados originais e identificar calculados.
+- [x] Corrigir açúcar/carboidrato, leitura de colunas, vírgulas e defaults artificiais; migration preserva catálogo atual.
+- [x] Correções de transcrição e novo registro para formulação diferente; todos os alimentos habilitados alimentam prompts.
 
 Aceite: fixtures com vitaminas/minerais, nutrientes desconhecidos, múltiplas colunas, mg/µg/g/ml e valores zero; revisão manual completa o que OCR não leu; sem cálculo de refeições a partir de texto livre.
+
+Progresso P5: o modelo agora preserva nutrientes e bases arbitrários, unidade, %VD, certeza, origem, OCR bruto, imagem original e disponibilidade para planejamento. OCR gera linhas revisáveis, mantém açúcares separados de carboidratos e não transforma números malformados em valores truncados; quando há menos valores OCR que bases reconhecidas, não presume alinhamento. A tela permite completar tabelas parciais e corrigir produtos salvos. Dados locais legados de macros são convertidos e persistidos no modelo estruturado; a migration aditiva `016_p5_food_nutrition_tables.sql` faz o backfill Supabase e cria armazenamento privado com políticas por proprietário. Derivação está limitada a bases em gramas e é identificada como calculada; ambos os prompts recebem todas as linhas/ingredientes dos alimentos habilitados. Validado: 69 suítes/542 testes Jest, TypeScript, export web (24 rotas) e dois fluxos Playwright de cadastro incompleto/completo e correção passaram, incluindo fixtures de µg/ml, alinhamento de colunas, migração local e upload/caminho de imagem no adaptador Supabase. A migration ainda não foi executada contra PostgreSQL/Supabase, portanto backfill e políticas permanecem sem validação de integração.
 
 ### P6 — Exames utilizáveis e fotos de progresso no navegador
 

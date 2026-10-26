@@ -4,6 +4,7 @@ import { WorkoutSession } from '../../entities/WorkoutSession';
 import { Exam } from '../../entities/Exam';
 import { MealConsumption } from '../../entities/MealConsumption';
 import { FoodItem } from '../../entities/FoodItem';
+import { formatFoodNutritionForPrompt } from '../food/FormatFoodNutrition';
 import { CSV_PROMPT_CONTRACT } from '../routine/CsvPromptContract';
 
 export function generateReviewPrompt(
@@ -71,10 +72,8 @@ export function generateReviewPrompt(
         : 'No exams available.';
 
     const foodSummary = foodItems
-        .map(
-            (f) =>
-                `- ${f.name}: ${f.calories}kcal, ${f.proteinGrams}g protein, ${f.carbsGrams}g carbs, ${f.fatGrams}g fat per ${f.servingSizeGrams}g`,
-        )
+        .filter((food) => food.availableForPlanning)
+        .map(formatFoodNutritionForPrompt)
         .join('\n');
 
     return `You are a professional nutritionist and personal trainer reviewing the current plan for the following user. Analyze their progress and suggest improvements.

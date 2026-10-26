@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
     ActivityIndicator,
     ScrollView,
@@ -8,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FoodItem } from '../../src/domain/entities/FoodItem';
+import { derivePer100g } from '../../src/domain/entities/FoodItem';
 import { Button } from '../../src/ui/components/Button';
 import { Card } from '../../src/ui/components/Card';
 import { EmptyState } from '../../src/ui/components/EmptyState';
@@ -18,7 +20,7 @@ import {
     FOOD_IMPORT_ACTION_LABEL,
     FOOD_IMPORT_HINT,
 } from '../food/copy';
-import { formatMacroLine } from '../food/format';
+import { formatMacroLine, formatNutrientValue } from '../food/format';
 import { navigateToFoodScan } from '../food/navigation';
 
 export default function NutritionScreen() {
@@ -28,21 +30,24 @@ export default function NutritionScreen() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
+    useFocusEffect(useCallback(() => {
+        let active = true;
         async function loadFoodItems() {
             try {
                 setLoading(true);
+                setError(null);
                 const data = await foodRepo.getFoodItems();
-                setFoods(data);
+                if (active) setFoods(data);
             } catch {
-                setError('Erro ao carregar alimentos');
+                if (active) setError('Erro ao carregar alimentos');
             } finally {
-                setLoading(false);
+                if (active) setLoading(false);
             }
         }
 
         loadFoodItems();
-    }, [foodRepo]);
+        return () => { active = false; };
+    }, [foodRepo]));
 
     if (loading) {
         return (
@@ -58,7 +63,7 @@ export default function NutritionScreen() {
                 <TypographyText variant="h2" color={Colors.textPrimary}>
                     Nutrição
                 </TypographyText>
-                <TouchableOpacity style={styles.importBtn} onPress={navigateToFoodScan}>
+                <TouchableOpacity style={styles.importBtn} onPress={() => navigateToFoodScan()}>
                     <TypographyText variant="label" color={Colors.primary}>
                         {FOOD_IMPORT_ACTION_LABEL}
                     </TypographyText>
@@ -116,14 +121,56 @@ export default function NutritionScreen() {
                                 </TypographyText>
 
                                 <TypographyText variant="bodySmall" color={Colors.textDisabled}>
-                                    Porção: {item.servingSizeGrams.toLocaleString('pt-BR')} g
+                                    {item.nutritionColumns.map((column) => {
+                                        const basis = column.basisAmount === null || !column.basisUnit
+                                            ? 'base desconhecida'
+                                            : `${column.basisAmount.toLocaleString('pt-BR')} ${column.basisUnit}`;
+                                        return `${column.label}: ${basis}`;
+                                    }).join(' • ')}
                                 </TypographyText>
+                                {(item.nutritionColumns.some((column) => column.basisAmount === null)
+                                    || item.nutrients.some((nutrient) => nutrient.values.some(
+                                        (value) => value.certainty !== 'confirmed' || value.amount === null,
+                                    ))) && (
+                                    <TypographyText variant="bodySmall" color={Colors.warning}>
+                                        Tabela incompleta ou com valores incertos — revise antes do planejamento.
+                                    </TypographyText>
+                                )}
+
+                                <View style={styles.nutritionTable}>
+                                    {item.nutrients.map((nutrient) => {
+                                        const values = nutrient.values.map((value) => formatNutrientValue(nutrient, value));
+                                        const derived = derivePer100g(nutrient, item.nutritionColumns);
+                                        if (derived) {
+                                            values.push(`${nutrient.label}: ${derived.amount!.toLocaleString('pt-BR')} ${derived.unit} (calculado por 100 g)`);
+                                        }
+                                        return (
+                                            <TypographyText key={nutrient.id} variant="bodySmall" color={Colors.textSecondary}>
+                                                {values.join(' • ')}
+                                            </TypographyText>
+                                        );
+                                    })}
+                                    {item.nutrients.length === 0 && (
+                                        <TypographyText variant="bodySmall" color={Colors.textDisabled}>
+                                            Tabela incompleta — nenhum nutriente informado.
+                                        </TypographyText>
+                                    )}
+                                </View>
 
                                 {item.ingredients ? (
                                     <TypographyText variant="bodySmall" color={Colors.textSecondary} style={styles.ingredients}>
                                         Ingredientes: {item.ingredients}
                                     </TypographyText>
                                 ) : null}
+                                <TypographyText variant="bodySmall" color={Colors.textDisabled}>
+                                    {item.availableForPlanning ? 'Disponível para planejamento' : 'Indisponível para planejamento'}
+                                </TypographyText>
+                                {item.originalImagePath && (
+                                    <TypographyText variant="bodySmall" color={Colors.textDisabled}>
+                                        Imagem original preservada
+                                    </TypographyText>
+                                )}
+                                <Button label="Corrigir rótulo" variant="ghost" onPress={() => navigateToFoodScan(item.id)} />
                             </Card>
                         ))}
                     </ScrollView>
@@ -161,5 +208,6 @@ const styles = StyleSheet.create({
     listContent: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.lg, gap: Spacing.sm },
     foodCard: { gap: 4, overflow: 'hidden' },
     macroLine: { marginTop: 2, flexShrink: 1 },
+    nutritionTable: { gap: 3, marginTop: Spacing.xs },
     ingredients: { marginTop: 4, flexShrink: 1 },
 });

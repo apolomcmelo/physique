@@ -1,8 +1,11 @@
 import { createWorker } from 'tesseract.js';
-import { parseLocalizedDecimal } from '../../domain/value-objects/LocalizedDecimal';
+import { FoodNutrient, NutritionColumn } from '../../domain/entities/FoodItem';
+import { findFirstNutrientValue, parseNutritionLabelText } from './NutritionLabelParser';
 
 export interface OcrResult {
     rawText: string;
+    columns: NutritionColumn[];
+    nutrients: FoodNutrient[];
     nutritionData: Partial<{
         calories: number;
         proteinGrams: number;
@@ -13,109 +16,34 @@ export interface OcrResult {
     }>;
 }
 
-// ── Regex patterns (PT-BR and EN) ─────────────────────────────────────────────
-
-const PATTERNS = {
-    calories: [
-        /calorias[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])/i,
-        /energia[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*kcal/i,
-        /calories?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])/i,
-        /energy[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*kcal/i,
-        /valor\s+energ[eé]tico[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])/i,
-    ],
-    proteinGrams: [
-        /prote[ií]nas?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-        /proteins?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-    ],
-    carbsGrams: [
-        /carboidratos?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-        /carbohydrates?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-        /total\s+carb[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-        /(?:a[cç][uú]cares?\s+totais?|total\s+sugars?)[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-    ],
-    fatGrams: [
-        /gorduras?\s+totais?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-        /total\s+fat[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-        /lipídios?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-        /fats?[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-    ],
-    servingSizeGrams: [
-        /por[çc][aã]o[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-        /serving\s+size[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-        /por[çc][aã]o\s+de[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-        /tamanho\s+da\s+por[çc][aã]o[^\d]*(\d+(?:[.,]\d+)?)(?![\d.,])\s*g/i,
-    ],
-    ingredients: [
-        /ingredientes?[:\s]+([^.]+(?:\.[^.]+)*)/i,
-        /ingredients?[:\s]+([^.]+(?:\.[^.]+)*)/i,
-    ],
-};
-
-function extractNumber(text: string, patterns: RegExp[]): number | undefined {
-    for (const pattern of patterns) {
-        const match = pattern.exec(text);
-        if (match?.[1]) {
-            const value = parseLocalizedDecimal(match[1]);
-            if (value !== null) {
-                return value;
-            }
-        }
-    }
-    return undefined;
-}
-
-function extractIngredients(text: string): string | undefined {
-    for (const pattern of PATTERNS.ingredients) {
-        const match = pattern.exec(text);
-        if (match?.[1]) {
-            return match[1].trim().replace(/\s+/g, ' ');
-        }
-    }
-    return undefined;
-}
-
-// ── Main export ───────────────────────────────────────────────────────────────
-
 export async function recognizeNutritionLabel(imageUri: string): Promise<OcrResult> {
     const worker = await createWorker('por+eng');
 
     try {
         const { data } = await worker.recognize(imageUri);
         const rawText = data.text ?? '';
-
+        const parsed = parseNutritionLabelText(rawText);
         const nutritionData: OcrResult['nutritionData'] = {};
 
-        const calories = extractNumber(rawText, PATTERNS.calories);
-        if (calories !== undefined) {
-            nutritionData.calories = calories;
+        const legacyFields: Array<[keyof OcrResult['nutritionData'], string[]]> = [
+            ['calories', ['Calorias', 'Valor energético', 'Energia', 'Calories', 'Energy']],
+            ['proteinGrams', ['Proteínas', 'Proteína', 'Protein']],
+            ['carbsGrams', ['Carboidratos', 'Carboidrato', 'Carbohydrates', 'Total carbs']],
+            ['fatGrams', ['Gorduras totais', 'Gordura total', 'Total fat', 'Lipídios']],
+        ];
+        for (const [field, labels] of legacyFields) {
+            const value = findFirstNutrientValue(parsed, labels);
+            if (value !== undefined) Object.assign(nutritionData, { [field]: value });
         }
+        if (parsed.servingSizeGrams !== undefined) nutritionData.servingSizeGrams = parsed.servingSizeGrams;
+        if (parsed.ingredients !== undefined) nutritionData.ingredients = parsed.ingredients;
 
-        const proteinGrams = extractNumber(rawText, PATTERNS.proteinGrams);
-        if (proteinGrams !== undefined) {
-            nutritionData.proteinGrams = proteinGrams;
-        }
-
-        const carbsGrams = extractNumber(rawText, PATTERNS.carbsGrams);
-        if (carbsGrams !== undefined) {
-            nutritionData.carbsGrams = carbsGrams;
-        }
-
-        const fatGrams = extractNumber(rawText, PATTERNS.fatGrams);
-        if (fatGrams !== undefined) {
-            nutritionData.fatGrams = fatGrams;
-        }
-
-        const servingSizeGrams = extractNumber(rawText, PATTERNS.servingSizeGrams);
-        if (servingSizeGrams !== undefined) {
-            nutritionData.servingSizeGrams = servingSizeGrams;
-        }
-
-        const ingredients = extractIngredients(rawText);
-        if (ingredients !== undefined) {
-            nutritionData.ingredients = ingredients;
-        }
-
-        return { rawText, nutritionData };
+        return {
+            rawText,
+            columns: parsed.columns,
+            nutrients: parsed.nutrients,
+            nutritionData,
+        };
     } finally {
         await worker.terminate();
     }
