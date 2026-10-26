@@ -12,6 +12,7 @@ alter table weight_records add constraint weight_records_at_least_one_measuremen
 alter table user_profiles alter column current_weight_kg drop not null;
 
 drop policy if exists "allow_all_weight_records" on weight_records;
+drop policy if exists "weight_records_owner_all" on weight_records;
 create policy "weight_records_owner_all" on weight_records for all to authenticated
 using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
