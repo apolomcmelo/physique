@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { router } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
 import {
     ActivityIndicator,
     ScrollView,
@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MealPlanEntry } from '../../src/domain/entities/MealPlan';
 import { User } from '../../src/domain/entities/User';
 import { WeightRecord } from '../../src/domain/entities/WeightRecord';
+import { calculateWeightGoalProgress, selectWeightBaseline, selectWeightGoal, WeightGoal } from '../../src/domain/entities/WeightGoal';
 import { Workout } from '../../src/domain/entities/Workout';
 import { getItem } from '../../src/adapters/local/LocalStorage';
 import { getNextMeal } from '../../src/domain/use-cases/meal/GetNextMeal';
@@ -23,10 +24,12 @@ import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Spacing } from '../../src/ui/theme';
 
 export default function DashboardScreen() {
-    const { userRepo, workoutRepo, mealRepo, weightRepo } = useRepositories();
+    const { userRepo, workoutRepo, mealRepo, weightRepo, weightGoalRepo } = useRepositories();
 
     const [user, setUser] = useState<User | null>(null);
     const [latestWeight, setLatestWeight] = useState<WeightRecord | null>(null);
+    const [weightRecords, setWeightRecords] = useState<WeightRecord[]>([]);
+    const [weightGoals, setWeightGoals] = useState<WeightGoal[]>([]);
     const [nextWorkout, setNextWorkout] = useState<Workout | null>(null);
     const [fallbackWorkout, setFallbackWorkout] = useState<Workout | null>(null);
     const [nextMeal, setNextMeal] = useState<MealPlanEntry | null>(null);
@@ -38,17 +41,22 @@ export default function DashboardScreen() {
     const waterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [waterIntervalMs, setWaterIntervalMs] = useState(60 * 60 * 1000); // default 1h
 
-    useEffect(() => {
+    useFocusEffect(useCallback(() => {
         async function load() {
             try {
                 setLoading(true);
-                const [u, w, meals] = await Promise.all([
+                const [u, weights, goals, meals] = await Promise.all([
                     userRepo.getUser(),
-                    weightRepo.getLatestWeight(),
+                    weightRepo.getWeightHistory(),
+                    weightGoalRepo.getWeightGoals(),
                     mealRepo.getMealPlanEntries(),
                 ]);
+                const latest = weights.filter((record) => record.weightKg !== null)
+                    .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0] ?? null;
                 setUser(u);
-                setLatestWeight(w);
+                setWeightRecords(weights);
+                setWeightGoals(goals);
+                setLatestWeight(latest);
 
                 const now = new Date();
                 const [nw, nm] = await Promise.all([
@@ -70,10 +78,10 @@ export default function DashboardScreen() {
             }
         }
         load();
+    }, []));
 
-        return () => {
-            if (waterTimerRef.current) clearTimeout(waterTimerRef.current);
-        };
+    useEffect(() => () => {
+        if (waterTimerRef.current) clearTimeout(waterTimerRef.current);
     }, []);
 
     function handleDrankWater() {
@@ -111,25 +119,14 @@ export default function DashboardScreen() {
         return `Em ${h}h${m > 0 ? ` ${m}min` : ''}`;
     }
 
-    const currentWeight = latestWeight?.weightKg ?? user?.currentWeight ?? 0;
-    const goalWeight = user?.goalWeight ?? 0;
-    const profileWeight = user?.currentWeight ?? 0;
-    const weightDelta = goalWeight > 0 ? currentWeight - goalWeight : 0;
-
-    // Correct progress for weight loss vs gain
-    let progressCurrent = 0;
-    let progressGoal = 1;
-    if (goalWeight > 0 && profileWeight > 0) {
-        if (profileWeight > goalWeight) {
-            // weight loss: measure how many kg lost out of total to lose
-            progressCurrent = Math.max(0, profileWeight - currentWeight);
-            progressGoal = Math.max(0.01, profileWeight - goalWeight);
-        } else if (profileWeight < goalWeight) {
-            // weight gain: measure how many kg gained out of total to gain
-            progressCurrent = Math.max(0, currentWeight - profileWeight);
-            progressGoal = Math.max(0.01, goalWeight - profileWeight);
-        }
-    }
+    const currentWeight = latestWeight?.weightKg ?? null;
+    const activeGoal = selectWeightGoal(weightGoals);
+    const goalWeight = activeGoal?.targetWeightKg ?? null;
+    const baselineWeight = activeGoal ? selectWeightBaseline(weightRecords, activeGoal)?.weightKg ?? null : null;
+    const goalProgress = activeGoal
+        ? calculateWeightGoalProgress(currentWeight, activeGoal, baselineWeight)
+        : null;
+    const weightDelta = currentWeight !== null && goalWeight !== null ? currentWeight - goalWeight : null;
 
     if (loading) {
         return (
@@ -169,23 +166,33 @@ export default function DashboardScreen() {
                     </TypographyText>
                     <View style={styles.weightRow}>
                         <TypographyText variant="h2" color={Colors.textPrimary}>
-                            {currentWeight > 0 ? `${currentWeight} kg` : '— kg'}
+                            {currentWeight !== null ? `${currentWeight.toLocaleString('pt-BR')} kg` : '— kg'}
                         </TypographyText>
-                        {goalWeight > 0 && (
+                        {goalWeight !== null && (
                             <TypographyText variant="body" color={Colors.textSecondary}>
-                                Objetivo: {goalWeight} kg
+                                Objetivo: {goalWeight.toLocaleString('pt-BR')} kg
                             </TypographyText>
                         )}
                     </View>
-                    {weightDelta !== 0 && (
-                        <TypographyText variant="bodySmall" color={weightDelta > 0 ? Colors.warning : Colors.success}>
-                            {weightDelta > 0 ? '▼' : '▲'} {Math.abs(weightDelta).toFixed(1)} kg para o objetivo
+                    {latestWeight && (
+                        <TypographyText variant="bodySmall" color={Colors.textSecondary}>
+                            Medido em {latestWeight.recordedAt.toLocaleDateString('pt-BR')}
                         </TypographyText>
                     )}
-                    {goalWeight > 0 && currentWeight > 0 && (
+                    {weightDelta !== null && weightDelta !== 0 && (
+                        <TypographyText variant="bodySmall" color={weightDelta > 0 ? Colors.warning : Colors.success}>
+                            {weightDelta > 0 ? '▼' : '▲'} {Math.abs(weightDelta).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg para o objetivo
+                        </TypographyText>
+                    )}
+                    {activeGoal && goalProgress && (
                         <View style={{ marginTop: Spacing.sm }}>
-                            <ProgressBar current={progressCurrent} goal={progressGoal} showPercentage />
+                            <ProgressBar current={goalProgress.progress * 100} goal={100} showPercentage />
                         </View>
+                    )}
+                    {activeGoal && !goalProgress && (
+                        <TypographyText variant="bodySmall" color={Colors.textSecondary} style={{ marginTop: Spacing.sm }}>
+                            Progresso indisponível: registre uma medição de peso na data de início da meta ou antes.
+                        </TypographyText>
                     )}
                 </Card>
 

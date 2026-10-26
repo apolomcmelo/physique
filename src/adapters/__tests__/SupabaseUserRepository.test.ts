@@ -22,6 +22,7 @@ const baseRow = {
     body_fat_percentage: 20,
     protein_percentage: 18,
     objective: 'Lose weight',
+    timezone: 'America/Sao_Paulo',
     created_at: '2024-01-01T00:00:00.000Z',
     updated_at: '2024-01-01T00:00:00.000Z',
 };
@@ -63,6 +64,12 @@ describe('SupabaseUserRepository', () => {
             expect(user!.name).toBe('Alice');
             expect(user!.dateOfBirth).toEqual(new Date('1990-05-10'));
             expect(user!.height).toBe(165);
+            expect(user!.timezone).toBe('America/Sao_Paulo');
+        });
+        it('maps profiles without an independent current-weight field', async () => {
+            buildChain({ data: { ...baseRow, current_weight_kg: null }, error: null });
+            const user = await repo.getUser();
+            expect(user?.currentWeight).toBeNull();
         });
 
         it('throws when Supabase returns an error', async () => {
@@ -106,6 +113,7 @@ describe('SupabaseUserRepository', () => {
                 bodyFatPercentage: null,
                 proteinPercentage: null,
                 objective: 'Get fit',
+                timezone: 'Pacific/Auckland',
                 createdAt: new Date('2024-01-01T00:00:00.000Z'),
                 updatedAt: new Date('2024-01-01T00:00:00.000Z'),
             };
@@ -114,6 +122,7 @@ describe('SupabaseUserRepository', () => {
             // id must be the exact UUID passed — not a custom timestamp string
             expect(insertedRow.id).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
             expect(insertedRow.user_id).toBe('auth-user-id');
+            expect(insertedRow.timezone).toBe('Pacific/Auckland');
         });
 
         it('serialises date_of_birth using local date, not UTC, to avoid off-by-one in negative UTC offsets', async () => {
@@ -129,6 +138,7 @@ describe('SupabaseUserRepository', () => {
                 bodyFatPercentage: null,
                 proteinPercentage: null,
                 objective: 'Get fit',
+                timezone: 'Pacific/Auckland',
                 createdAt: new Date('2024-01-01T00:00:00.000Z'),
                 updatedAt: new Date('2024-01-01T00:00:00.000Z'),
             };
@@ -150,6 +160,7 @@ describe('SupabaseUserRepository', () => {
                 bodyFatPercentage: null,
                 proteinPercentage: null,
                 objective: 'Get fit',
+                timezone: 'Pacific/Auckland',
                 createdAt: new Date('2024-01-01T00:00:00.000Z'),
                 updatedAt: new Date('2024-01-01T00:00:00.000Z'),
             };

@@ -5,7 +5,7 @@ import { supabase } from '../../infrastructure/supabase/client';
 interface WeightRecordRow {
     id: string;
     user_id: string;
-    weight_kg: number;
+    weight_kg: number | null;
     body_fat_percentage: number | null;
     protein_percentage: number | null;
     recorded_at: string;
@@ -61,10 +61,34 @@ export class SupabaseWeightRepository implements IWeightRepository {
         }
     }
 
+    async updateWeightRecord(record: WeightRecord): Promise<void> {
+        const { data, error } = await supabase
+            .from('weight_records')
+            .update(weightRecordToRow(record))
+            .eq('id', record.id)
+            .eq('user_id', record.userId)
+            .select('id')
+            .maybeSingle();
+        if (error) throw new Error(`Failed to update weight record: ${error.message}`);
+        if (!data) throw new Error('Failed to update weight record: record not found or not owned by current user');
+    }
+
+    async deleteWeightRecord(id: string): Promise<void> {
+        const { data, error } = await supabase
+            .from('weight_records')
+            .delete()
+            .eq('id', id)
+            .select('id')
+            .maybeSingle();
+        if (error) throw new Error(`Failed to delete weight record: ${error.message}`);
+        if (!data) throw new Error('Failed to delete weight record: record not found or not owned by current user');
+    }
+
     async getLatestWeight(): Promise<WeightRecord | null> {
         const { data, error } = await supabase
             .from('weight_records')
             .select('*')
+            .not('weight_kg', 'is', null)
             .order('recorded_at', { ascending: false })
             .limit(1)
             .maybeSingle();

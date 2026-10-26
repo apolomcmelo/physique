@@ -1,5 +1,5 @@
 import { IUserRepository } from '../../domain/ports/UserRepository';
-import { User, createUser } from '../../domain/entities/User';
+import { getDeviceTimezone, User } from '../../domain/entities/User';
 import { supabase } from '../../infrastructure/supabase/client';
 
 interface UserProfileRow {
@@ -8,7 +8,7 @@ interface UserProfileRow {
     name: string;
     date_of_birth: string;
     height_cm: number;
-    current_weight_kg: number;
+    current_weight_kg: number | null;
     goal_weight_kg: number;
     body_fat_percentage: number | null;
     protein_percentage: number | null;
@@ -29,7 +29,7 @@ function rowToUser(row: UserProfileRow): User {
         bodyFatPercentage: row.body_fat_percentage,
         proteinPercentage: row.protein_percentage,
         objective: row.objective,
-        timezone: row.timezone ?? undefined,
+        timezone: row.timezone ?? getDeviceTimezone(),
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
     };
@@ -50,7 +50,7 @@ function userToRow(user: User): Omit<UserProfileRow, 'user_id' | 'created_at' | 
         body_fat_percentage: user.bodyFatPercentage,
         protein_percentage: user.proteinPercentage,
         objective: user.objective,
-        timezone: user.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezone: user.timezone ?? getDeviceTimezone(),
         updated_at: new Date().toISOString(),
     };
 }

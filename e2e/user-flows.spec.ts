@@ -86,24 +86,54 @@ test.describe('authenticated user flows', () => {
     test('creates and reloads a user profile', async ({ page }) => {
         await page.goto('/settings', { waitUntil: 'domcontentloaded' });
         await page.getByPlaceholder('Seu nome').fill('E2E Athlete');
-        await page.getByPlaceholder('DD/MM/AAAA').fill('01011990');
+        await page.getByPlaceholder('DD/MM/AAAA').first().fill('01011990');
         await page.getByPlaceholder('175').fill('175,5');
         await page.getByPlaceholder('75', { exact: true }).fill('75,5');
         await page.getByPlaceholder('70', { exact: true }).fill('70,5');
         await page.getByPlaceholder('20', { exact: true }).fill('18,5');
         await page.getByPlaceholder('22').fill('20,5');
         await page.getByPlaceholder('Ex: Perder gordura e ganhar massa').fill('Saúde e condicionamento');
+        await page.getByPlaceholder('America/Sao_Paulo').fill('America/Sao_Paulo');
         await page.getByText('Salvar Perfil', { exact: true }).click();
 
         await expect(page.getByText('E2E Athlete', { exact: true })).toBeVisible();
         await expect(page.getByText('175,5 cm', { exact: true })).toBeVisible();
-        await expect(page.getByText('75,5 kg', { exact: true })).toBeVisible();
+        await expect(page.getByText(/75,5 kg \(/)).toBeVisible();
         await expect(page.getByText('70,5 kg', { exact: true })).toBeVisible();
         await expect(page.getByText('18,5%', { exact: true })).toBeVisible();
         await expect(page.getByText('20,5%', { exact: true })).toBeVisible();
+        await expect(page.getByText('Fuso horário', { exact: true })).toBeVisible();
+        await expect(page.getByText('America/Sao_Paulo', { exact: true })).toBeVisible();
         await page.screenshot({ path: 'docs/e2e-profile.png', fullPage: true });
         await page.reload();
         await expect(page.getByText('E2E Athlete', { exact: true })).toBeVisible();
+        await expect(page.getByText('America/Sao_Paulo', { exact: true })).toBeVisible();
+        await page.goto('/');
+        await expect(page.getByText('75,5 kg', { exact: true })).toBeVisible();
+        await expect(page.getByText(/Objetivo: 70,5 kg/)).toBeVisible();
+        await expect(page.getByText('Progresso indisponível: registre uma medição de peso na data de início da meta ou antes.', { exact: true })).toHaveCount(0);
+
+        await page.goto('/settings');
+        await page.getByLabel('Editar perfil').click();
+        await page.getByPlaceholder('20').fill('19,5');
+        await page.getByText('Salvar Perfil', { exact: true }).click();
+        await expect(page.getByText('19,5%', { exact: true })).toBeVisible();
+        await page.reload();
+        await expect(page.getByText('19,5%', { exact: true })).toBeVisible();
+    });
+
+    test('does not invent goal progress without a dated baseline measurement', async ({ page }) => {
+        await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+        await page.getByPlaceholder('Seu nome').fill('E2E Sem Baseline');
+        await page.getByPlaceholder('DD/MM/AAAA').first().fill('01011990');
+        await page.getByPlaceholder('175').fill('175');
+        await page.getByPlaceholder('70', { exact: true }).fill('70');
+        await page.getByPlaceholder('Ex: Perder gordura e ganhar massa').fill('Saúde');
+        await page.getByText('Salvar Perfil', { exact: true }).click();
+        await expect(page.getByText('E2E Sem Baseline', { exact: true })).toBeVisible();
+        await page.goto('/');
+        await expect(page.getByText('Progresso indisponível: registre uma medição de peso na data de início da meta ou antes.', { exact: true })).toBeVisible();
+        await expect(page.getByText('— kg', { exact: true })).toBeVisible();
     });
 
     test('previews and cancels a routine CSV import without saving', async ({ page }) => {
@@ -365,11 +395,37 @@ test.describe('authenticated user flows', () => {
         await expect(page.getByText('Proteína: 20,5%', { exact: true })).toBeVisible();
     });
 
-    test('allows setting the profile timezone', async ({ page }) => {
-        test.fail(true, 'Requirement gap: profile has no editable timezone field.');
-
+    test('persists the profile timezone', async ({ page }) => {
         await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-        await expect(page.getByText('Fuso horário', { exact: true })).toBeVisible();
+        await page.getByPlaceholder('Seu nome').fill('E2E Timezone');
+        await page.getByPlaceholder('DD/MM/AAAA').first().fill('01011990');
+        await page.getByPlaceholder('175').fill('175');
+        await page.getByPlaceholder('70', { exact: true }).fill('70');
+        await page.getByPlaceholder('Ex: Perder gordura e ganhar massa').fill('Saúde');
+        await page.getByPlaceholder('America/Sao_Paulo').fill('Pacific/Auckland');
+        await page.getByText('Salvar Perfil', { exact: true }).click();
+        await expect(page.getByText('Pacific/Auckland', { exact: true })).toBeVisible();
+        await page.reload();
+        await expect(page.getByText('Pacific/Auckland', { exact: true })).toBeVisible();
+    });
+
+    test('records, corrects, and deletes an independent body-fat measurement', async ({ page }) => {
+        await page.goto('/history', { waitUntil: 'domcontentloaded' });
+        await page.getByText('+ Registrar Peso', { exact: true }).click();
+        await page.getByPlaceholder('Ex: 18.5').fill('18,5');
+        await page.getByPlaceholder('DD/MM/AAAA').last().fill('01/01/2025');
+        await page.getByPlaceholder('HH:MM').fill('12:00');
+        await page.getByText('Salvar', { exact: true }).click();
+        await expect(page.getByText('Gordura: 18,5%', { exact: true })).toBeVisible();
+        await expect(page.getByText('Medição corporal', { exact: true })).toBeVisible();
+
+        await page.getByText('Corrigir medição', { exact: true }).click();
+        await page.locator('input').nth(1).fill('19,5');
+        await page.getByText('Salvar medição', { exact: true }).click();
+        await expect(page.getByText('Gordura: 19,5%', { exact: true })).toBeVisible();
+
+        await page.getByText('Excluir medição', { exact: true }).click();
+        await expect(page.getByText('Sem registros', { exact: true })).toBeVisible();
     });
 
     test('requires exam date before upload', async ({ page }) => {

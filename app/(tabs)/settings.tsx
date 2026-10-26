@@ -1,7 +1,8 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
     ActivityIndicator,
     Modal,
@@ -13,7 +14,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Exam, ExamFileType, createExam } from '../../src/domain/entities/Exam';
-import { User, calculateAge } from '../../src/domain/entities/User';
+import { getDeviceTimezone, isValidTimezone, User, calculateAge } from '../../src/domain/entities/User';
+import { WeightRecord } from '../../src/domain/entities/WeightRecord';
+import { createWeightGoal, selectWeightGoal, WeightGoal } from '../../src/domain/entities/WeightGoal';
+import { recordWeight } from '../../src/domain/use-cases/weight/RecordWeight';
+import { parseWeightDateTimeInput } from '../../src/domain/use-cases/weight/WeightRecordInput';
 import { parseLocalizedDecimal } from '../../src/domain/value-objects/LocalizedDecimal';
 import { generateNewPlanPrompt } from '../../src/domain/use-cases/prompt/GenerateNewPlanPrompt';
 import { generateReviewPrompt } from '../../src/domain/use-cases/prompt/GenerateReviewPrompt';
@@ -35,10 +40,12 @@ import { useRepositories } from '../../src/ui/hooks/useSupabase';
 import { Colors, Radius, Spacing, Typography } from '../../src/ui/theme';
 
 export default function SettingsScreen() {
-    const { userRepo, examRepo, weightRepo, workoutRepo, mealConsumptionRepo, foodRepo } = useRepositories();
+    const { userRepo, examRepo, weightRepo, weightGoalRepo, workoutRepo, mealConsumptionRepo, foodRepo } = useRepositories();
     const { session, signOut } = useAuth();
 
     const [user, setUser] = useState<User | null>(null);
+    const [weightRecords, setWeightRecords] = useState<WeightRecord[]>([]);
+    const [weightGoals, setWeightGoals] = useState<WeightGoal[]>([]);
     const [exams, setExams] = useState<Exam[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -54,6 +61,8 @@ export default function SettingsScreen() {
     const [bodyFat, setBodyFat] = useState('');
     const [protein, setProtein] = useState('');
     const [objective, setObjective] = useState('');
+    const [goalStartedAt, setGoalStartedAt] = useState(formatDateOfBirthDisplay(new Date()));
+    const [timezone, setTimezone] = useState(getDeviceTimezone());
 
     // Prompt modal
     const [promptVisible, setPromptVisible] = useState(false);
@@ -62,28 +71,44 @@ export default function SettingsScreen() {
     // Exam upload
     const [uploadingExam, setUploadingExam] = useState(false);
 
-    useEffect(() => { loadData(); }, []);
+    useFocusEffect(useCallback(() => {
+        loadData();
+    }, []));
 
-    function populateForm(u: User) {
+    function populateForm(u: User, goals: WeightGoal[] = weightGoals, measurements: WeightRecord[] = weightRecords) {
         const d = u.dateOfBirth instanceof Date ? u.dateOfBirth : new Date(u.dateOfBirth);
         setName(u.name);
         setDateOfBirth(formatDateOfBirthDisplay(d));
         setHeight(String(u.height));
-        setCurrentWeight(String(u.currentWeight));
-        setGoalWeight(String(u.goalWeight));
-        setBodyFat(u.bodyFatPercentage !== null ? String(u.bodyFatPercentage) : '');
-        setProtein(u.proteinPercentage !== null ? String(u.proteinPercentage) : '');
+        const currentGoal = selectWeightGoal(goals);
+        setCurrentWeight('');
+        setGoalWeight(String(currentGoal?.targetWeightKg ?? u.goalWeight));
+        setGoalStartedAt(formatDateOfBirthDisplay(currentGoal?.startedAt ?? u.createdAt));
+        const latestBodyFat = measurements.filter((record) => record.bodyFatPercentage !== null)
+            .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0]?.bodyFatPercentage;
+        const latestProtein = measurements.filter((record) => record.proteinPercentage !== null)
+            .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0]?.proteinPercentage;
+        setBodyFat(latestBodyFat != null ? String(latestBodyFat) : '');
+        setProtein(latestProtein != null ? String(latestProtein) : '');
         setObjective(u.objective);
+        setTimezone(u.timezone ?? getDeviceTimezone());
     }
 
     async function loadData() {
         try {
             setLoading(true);
-            const [u, e] = await Promise.all([userRepo.getUser(), examRepo.getExams()]);
+            const [u, e, measurements, goals] = await Promise.all([
+                userRepo.getUser(),
+                examRepo.getExams(),
+                weightRepo.getWeightHistory(),
+                weightGoalRepo.getWeightGoals(),
+            ]);
             setExams(e);
+            setWeightRecords(measurements);
+            setWeightGoals(goals);
             if (u) {
                 setUser(u);
-                populateForm(u);
+                populateForm(u, goals, measurements);
                 setEditMode(false);
             } else {
                 const googleName = typeof session?.user?.user_metadata?.full_name === 'string'
@@ -95,6 +120,8 @@ export default function SettingsScreen() {
                 if (googleName) {
                     setName(googleName);
                 }
+                setTimezone(getDeviceTimezone());
+                setGoalStartedAt(formatDateOfBirthDisplay(new Date()));
                 setEditMode(true);
             }
         } catch {
@@ -106,7 +133,7 @@ export default function SettingsScreen() {
 
     async function handleSaveProfile() {
         setError(null);
-        if (!name.trim() || !dateOfBirth || !height || !currentWeight || !goalWeight || !objective.trim()) {
+        if (!name.trim() || !dateOfBirth || !height || !goalWeight || !objective.trim()) {
             setError('Preencha todos os campos obrigatórios');
             return;
         }
@@ -116,16 +143,16 @@ export default function SettingsScreen() {
             return;
         }
         const parsedHeight = parseLocalizedDecimal(height);
-        const parsedCurrentWeight = parseLocalizedDecimal(currentWeight);
+        const parsedInitialWeight = currentWeight.trim() ? parseLocalizedDecimal(currentWeight) : null;
         const parsedGoalWeight = parseLocalizedDecimal(goalWeight);
         const parsedBodyFat = bodyFat.trim() ? parseLocalizedDecimal(bodyFat) : null;
         const parsedProtein = protein.trim() ? parseLocalizedDecimal(protein) : null;
-        if (parsedHeight === null || parsedCurrentWeight === null || parsedGoalWeight === null
+        if (parsedHeight === null || parsedGoalWeight === null
             || (bodyFat.trim() && parsedBodyFat === null) || (protein.trim() && parsedProtein === null)) {
             setError('Informe números válidos; use vírgula ou ponto como separador decimal.');
             return;
         }
-        if (parsedHeight <= 0 || parsedCurrentWeight <= 0 || parsedGoalWeight <= 0) {
+        if (parsedHeight <= 0 || (parsedInitialWeight !== null && parsedInitialWeight <= 0) || parsedGoalWeight <= 0) {
             setError('Altura e pesos devem ser maiores que zero');
             return;
         }
@@ -134,22 +161,103 @@ export default function SettingsScreen() {
             setError('Percentuais devem estar entre 0 e 100');
             return;
         }
+        if (!isValidTimezone(timezone.trim())) {
+            setError('Informe um fuso IANA válido, por exemplo America/Sao_Paulo.');
+            return;
+        }
+        const parsedGoalStart = parseWeightDateTimeInput(goalStartedAt, '00:00');
+        if (!parsedGoalStart) {
+            setError('Data de início da meta inválida (use DD/MM/AAAA).');
+            return;
+        }
+        const latestBodyFat = weightRecords
+            .filter((record) => record.bodyFatPercentage !== null)
+            .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0]?.bodyFatPercentage ?? null;
+        const latestProtein = weightRecords
+            .filter((record) => record.proteinPercentage !== null)
+            .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0]?.proteinPercentage ?? null;
+        if (user && ((latestBodyFat !== null && !bodyFat.trim()) || (latestProtein !== null && !protein.trim()))) {
+            setError('Para remover uma leitura corporal, corrija ou exclua a medição no Histórico.');
+            return;
+        }
+        const bodyFatChanged = parsedBodyFat !== null && parsedBodyFat !== latestBodyFat;
+        const proteinChanged = parsedProtein !== null && parsedProtein !== latestProtein;
         try {
             setSaving(true);
+            const persistedGoals = await weightGoalRepo.getWeightGoals();
+            const activeGoal = selectWeightGoal(persistedGoals);
+            const goalChanged = !activeGoal || activeGoal.targetWeightKg !== parsedGoalWeight
+                || activeGoal.startedAt.getTime() !== parsedGoalStart.getTime();
+
             const updated = await saveUserProfile(userRepo, {
                 name: name.trim(),
                 dateOfBirth: parsedDob,
                 height: parsedHeight,
-                currentWeight: parsedCurrentWeight,
+                currentWeight: user?.currentWeight ?? parsedInitialWeight,
                 goalWeight: parsedGoalWeight,
-                bodyFatPercentage: parsedBodyFat,
-                proteinPercentage: parsedProtein,
+                bodyFatPercentage: parsedBodyFat ?? user?.bodyFatPercentage ?? null,
+                proteinPercentage: parsedProtein ?? user?.proteinPercentage ?? null,
                 objective: objective.trim(),
+                timezone: timezone.trim(),
             });
+            const ownerId = await userRepo.getCurrentUserId();
+            if (!ownerId) throw new Error('É necessário estar logado para salvar medições ou metas.');
+
+            if (!user && (parsedInitialWeight !== null || parsedBodyFat !== null || parsedProtein !== null)) {
+                const persistedMeasurements = await weightRepo.getWeightHistory();
+                const initialMeasurementExists = persistedMeasurements.some((record) =>
+                    record.recordedAt.getTime() === parsedGoalStart.getTime()
+                    && record.weightKg === parsedInitialWeight
+                    && record.bodyFatPercentage === parsedBodyFat
+                    && record.proteinPercentage === parsedProtein);
+                if (!initialMeasurementExists) {
+                    const initialRecord = await recordWeight(
+                        weightRepo,
+                        ownerId,
+                        parsedInitialWeight,
+                        parsedBodyFat,
+                        parsedProtein,
+                        parsedGoalStart,
+                    );
+                    setWeightRecords((current) => [initialRecord, ...current]);
+                }
+            }
+
+            if (!user && goalChanged) {
+                const nextGoal = createWeightGoal({
+                    userId: ownerId,
+                    targetWeightKg: parsedGoalWeight,
+                    startedAt: parsedGoalStart,
+                });
+                await weightGoalRepo.saveWeightGoal(nextGoal);
+                setWeightGoals((current) => [...current, nextGoal]);
+            }
+
+            if (user && (bodyFatChanged || proteinChanged)) {
+                const updatedMeasurement = await recordWeight(
+                    weightRepo,
+                    ownerId,
+                    null,
+                    bodyFatChanged ? parsedBodyFat : null,
+                    proteinChanged ? parsedProtein : null,
+                );
+                setWeightRecords((current) => [updatedMeasurement, ...current]);
+            }
+            if (user && goalChanged) {
+                const nextGoal = createWeightGoal({
+                    userId: ownerId,
+                    targetWeightKg: parsedGoalWeight,
+                    startedAt: parsedGoalStart,
+                });
+                await weightGoalRepo.saveWeightGoal(nextGoal);
+                setWeightGoals((current) => [...current, nextGoal]);
+            }
             setUser(updated);
+            setTimezone(updated.timezone ?? timezone.trim());
             setEditMode(false);
-        } catch {
-            setError('Erro ao salvar perfil');
+        } catch (cause) {
+            console.error('[profile] measurement or goal save failed', { error: cause });
+            setError(cause instanceof Error ? cause.message : 'Erro ao salvar perfil, medição ou meta.');
         } finally {
             setSaving(false);
         }
@@ -279,6 +387,11 @@ export default function SettingsScreen() {
         Clipboard.setStringAsync(promptText);
     }
 
+    const latestWeight = [...weightRecords]
+        .filter((record) => record.weightKg !== null)
+        .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0] ?? null;
+    const currentGoal = selectWeightGoal(weightGoals);
+
     if (loading) {
         return (
             <View style={styles.centered}>
@@ -332,13 +445,23 @@ export default function SettingsScreen() {
                             <InfoRow label="Data de Nascimento" value={dobFormatted} />
                             <InfoRow label="Idade" value={age !== null ? `${age} anos` : '—'} />
                             <InfoRow label="Altura" value={`${user.height.toLocaleString('pt-BR')} cm`} />
-                            <InfoRow label="Peso Atual" value={`${user.currentWeight.toLocaleString('pt-BR')} kg`} />
-                            <InfoRow label="Peso Objetivo" value={`${user.goalWeight.toLocaleString('pt-BR')} kg`} />
-                            {user.bodyFatPercentage !== null && (
-                                <InfoRow label="Gordura" value={`${user.bodyFatPercentage.toLocaleString('pt-BR')}%`} />
+                            <InfoRow label="Peso Atual" value={latestWeight?.weightKg !== null && latestWeight
+                                ? `${latestWeight.weightKg.toLocaleString('pt-BR')} kg (${formatDateOfBirthDisplay(latestWeight.recordedAt)})`
+                                : 'Sem medição'} />
+                            <InfoRow label="Peso Objetivo" value={currentGoal
+                                ? `${currentGoal.targetWeightKg.toLocaleString('pt-BR')} kg`
+                                : 'Sem meta'} />
+                            {currentGoal && <InfoRow label="Início da meta" value={formatDateOfBirthDisplay(currentGoal.startedAt)} />}
+                            {user.timezone && <InfoRow label="Fuso horário" value={user.timezone} />}
+                            {weightRecords.some((record) => record.bodyFatPercentage !== null) && (
+                                <InfoRow label="Gordura" value={`${weightRecords
+                                    .filter((record) => record.bodyFatPercentage !== null)
+                                    .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0].bodyFatPercentage!.toLocaleString('pt-BR')}%`} />
                             )}
-                            {user.proteinPercentage !== null && (
-                                <InfoRow label="Proteína" value={`${user.proteinPercentage.toLocaleString('pt-BR')}%`} />
+                            {weightRecords.some((record) => record.proteinPercentage !== null) && (
+                                <InfoRow label="Proteína" value={`${weightRecords
+                                    .filter((record) => record.proteinPercentage !== null)
+                                    .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0].proteinPercentage!.toLocaleString('pt-BR')}%`} />
                             )}
                         </View>
 
@@ -378,15 +501,14 @@ export default function SettingsScreen() {
                         <TypographyText variant="bodySmall" color={Colors.textSecondary} style={styles.inputHint}>
                             Digite apenas os numeros. O app formata automaticamente como DD/MM/AAAA.
                         </TypographyText>
+                        {!user && <Input
+                            label="Peso inicial (kg)"
+                            placeholder="75"
+                            value={currentWeight}
+                            onChangeText={setCurrentWeight}
+                            keyboardType="decimal-pad"
+                        />}
                         <View style={styles.row}>
-                            <Input
-                                label="Peso Atual (kg)"
-                                placeholder="75"
-                                value={currentWeight}
-                                onChangeText={setCurrentWeight}
-                                keyboardType="decimal-pad"
-                                style={styles.halfInput}
-                            />
                             <Input
                                 label="Peso Objetivo (kg)"
                                 placeholder="70"
@@ -396,6 +518,8 @@ export default function SettingsScreen() {
                                 style={styles.halfInput}
                             />
                         </View>
+                        <Input label="Início da meta" placeholder="DD/MM/AAAA" value={goalStartedAt}
+                            onChangeText={setGoalStartedAt} />
                         <View style={styles.row}>
                             <Input
                                 label="Gordura (%)"
@@ -421,6 +545,11 @@ export default function SettingsScreen() {
                             onChangeText={setObjective}
                             multiline
                         />
+                        <Input label="Fuso horário (IANA)" placeholder="America/Sao_Paulo" value={timezone}
+                            onChangeText={setTimezone} autoCapitalize="none" />
+                        <TypographyText variant="bodySmall" color={Colors.textSecondary} style={styles.inputHint}>
+                            O fuso é salvo no perfil. O uso nos cálculos da agenda depende das regras de horário de verão ainda em definição.
+                        </TypographyText>
                         <View style={[styles.row, { marginTop: Spacing.sm }]}>
                             {editMode && user && (
                                 <Button

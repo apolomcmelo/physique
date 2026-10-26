@@ -19,15 +19,21 @@ export function generateReviewPrompt(
     const sortedWeight = [...weightHistory].sort(
         (a, b) => b.recordedAt.getTime() - a.recordedAt.getTime(),
     );
-    const latestWeight = sortedWeight[0] ?? null;
+    const latestBy = (pick: (record: WeightRecord) => number | null): WeightRecord | null =>
+        sortedWeight.find((record) => pick(record) !== null) ?? null;
+    const latestWeight = latestBy((record) => record.weightKg);
+    const latestBodyFat = latestBy((record) => record.bodyFatPercentage);
+    const latestProtein = latestBy((record) => record.proteinPercentage);
 
     const weightHistorySummary = sortedWeight
-        .map(
-            (w) =>
-                `- ${w.recordedAt.toISOString().split('T')[0]}: ${w.weightKg}kg` +
-                (w.bodyFatPercentage != null ? `, ${w.bodyFatPercentage}% body fat` : '') +
-                (w.proteinPercentage != null ? `, ${w.proteinPercentage}% protein` : ''),
-        )
+        .map((w) => {
+            const readings = [
+                w.weightKg !== null ? `${w.weightKg}kg` : null,
+                w.bodyFatPercentage !== null ? `${w.bodyFatPercentage}% body fat` : null,
+                w.proteinPercentage !== null ? `${w.proteinPercentage}% protein` : null,
+            ].filter((reading) => reading !== null);
+            return `- ${w.recordedAt.toISOString().split('T')[0]}: ${readings.join(', ')}`;
+        })
         .join('\n');
 
     const last7Sessions = [...workoutSessions]
@@ -77,10 +83,10 @@ export function generateReviewPrompt(
 - Name: ${user.name}
 - Age: ${calculatedAge} years
 - Height: ${user.height} cm
-- Current Weight: ${latestWeight ? latestWeight.weightKg : user.currentWeight} kg
+- Current Weight: ${latestWeight?.weightKg ?? 'Unknown'} kg
 - Goal Weight: ${user.goalWeight} kg
-- Body Fat Percentage: ${latestWeight?.bodyFatPercentage ?? user.bodyFatPercentage ?? 'Unknown'}%
-- Protein Percentage: ${latestWeight?.proteinPercentage ?? user.proteinPercentage ?? 'Unknown'}%
+- Body Fat Percentage: ${latestBodyFat?.bodyFatPercentage ?? 'Unknown'}%
+- Protein Percentage: ${latestProtein?.proteinPercentage ?? 'Unknown'}%
 - Objective: ${user.objective}
 
 ## Weight History

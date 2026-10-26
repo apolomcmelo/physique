@@ -1,4 +1,4 @@
-import { User } from '../../domain/entities/User';
+import { getDeviceTimezone, User } from '../../domain/entities/User';
 import { IUserRepository } from '../../domain/ports/UserRepository';
 import { getItem, setItem } from './LocalStorage';
 
@@ -15,6 +15,7 @@ export class LocalUserRepository implements IUserRepository {
         if (!raw) return null;
         return {
             ...raw,
+            timezone: raw.timezone ?? getDeviceTimezone(),
             dateOfBirth: new Date(raw.dateOfBirth),
             createdAt: new Date(raw.createdAt),
             updatedAt: new Date(raw.updatedAt),

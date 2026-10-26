@@ -15,6 +15,7 @@ interface InputProps {
     value: string;
     onChangeText: (text: string) => void;
     keyboardType?: KeyboardTypeOptions;
+    autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
     secureTextEntry?: boolean;
     multiline?: boolean;
     style?: ViewStyle;
@@ -26,6 +27,7 @@ export const Input = ({
     value,
     onChangeText,
     keyboardType = 'default',
+    autoCapitalize,
     secureTextEntry = false,
     multiline = false,
     style,
@@ -42,6 +44,7 @@ export const Input = ({
                 placeholder={placeholder}
                 placeholderTextColor={Colors.textDisabled}
                 keyboardType={keyboardType}
+                autoCapitalize={autoCapitalize}
                 secureTextEntry={secureTextEntry}
                 multiline={multiline}
                 textAlignVertical={multiline ? 'top' : 'center'}

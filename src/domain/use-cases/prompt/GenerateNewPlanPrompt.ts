@@ -12,9 +12,12 @@ export function generateNewPlanPrompt(
 ): string {
     const calculatedAge = calculateAge(user.dateOfBirth);
 
-    const latestWeight = weightRecords.length > 0
-        ? weightRecords.sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0]
-        : null;
+    const latestBy = (key: (record: WeightRecord) => number | null): WeightRecord | null =>
+        [...weightRecords].filter((record) => key(record) !== null)
+            .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0] ?? null;
+    const latestWeight = latestBy((record) => record.weightKg);
+    const latestBodyFat = latestBy((record) => record.bodyFatPercentage);
+    const latestProtein = latestBy((record) => record.proteinPercentage);
 
     const lastThreeExams = exams
         .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime())
@@ -37,10 +40,10 @@ export function generateNewPlanPrompt(
 - Name: ${user.name}
 - Age: ${calculatedAge} years
 - Height: ${user.height} cm
-- Current Weight: ${latestWeight ? latestWeight.weightKg : user.currentWeight} kg
+- Current Weight: ${latestWeight?.weightKg ?? 'Unknown'} kg
 - Goal Weight: ${user.goalWeight} kg
-- Body Fat Percentage: ${latestWeight?.bodyFatPercentage ?? user.bodyFatPercentage ?? 'Unknown'}%
-- Protein Percentage: ${latestWeight?.proteinPercentage ?? user.proteinPercentage ?? 'Unknown'}%
+- Body Fat Percentage: ${latestBodyFat?.bodyFatPercentage ?? 'Unknown'}%
+- Protein Percentage: ${latestProtein?.proteinPercentage ?? 'Unknown'}%
 - Objective: ${user.objective}
 
 ## Recent Medical Exams (last 3)

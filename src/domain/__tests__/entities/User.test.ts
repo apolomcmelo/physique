@@ -1,4 +1,4 @@
-import { createUser, calculateAge } from '../../entities/User';
+import { createUser, calculateAge, isValidTimezone } from '../../entities/User';
 
 const DOB_30_YEARS_AGO = new Date(new Date().getFullYear() - 30, 0, 1);
 
@@ -86,6 +86,19 @@ describe('createUser', () => {
         expect(user.createdAt.getTime()).toBeLessThanOrEqual(after.getTime());
         expect(user.updatedAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
         expect(user.updatedAt.getTime()).toBeLessThanOrEqual(after.getTime());
+    });
+
+    it('defaults timezone from the device and validates configured IANA zones', () => {
+        const user = createUser(validParams);
+        expect(user.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+        expect(isValidTimezone('America/Sao_Paulo')).toBe(true);
+        expect(isValidTimezone('Not/A_Real_Zone')).toBe(false);
+    });
+
+    it('rejects an invalid timezone but permits a profile without an independent current-weight value', () => {
+        expect(() => createUser({ ...validParams, timezone: 'Not/A_Real_Zone' }))
+            .toThrow('Timezone must be a valid IANA timezone');
+        expect(createUser({ ...validParams, currentWeight: null }).currentWeight).toBeNull();
     });
 });
 

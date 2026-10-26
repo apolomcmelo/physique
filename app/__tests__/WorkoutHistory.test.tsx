@@ -1,16 +1,24 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { MealConsumption } from '../../src/domain/entities/MealConsumption';
+import { WeightRecord } from '../../src/domain/entities/WeightRecord';
 
 const mockHistory = jest.fn();
 const mockSaveSession = jest.fn(async () => {});
 const mockWeightHistory = jest.fn<Promise<unknown[]>, []>(async () => []);
-const mockSaveWeight = jest.fn(async () => {});
+const mockSaveWeight = jest.fn<Promise<void>, [WeightRecord]>(async () => {});
+const mockUpdateWeight = jest.fn<Promise<void>, [WeightRecord]>(async () => {});
+const mockDeleteWeight = jest.fn<Promise<void>, [string]>(async () => {});
 const mockMealConsumptions = jest.fn<Promise<MealConsumption[]>, []>(async () => []);
 const mockSaveMealConsumption = jest.fn<Promise<void>, [MealConsumption]>(async () => {});
 const mockDeleteMealConsumption = jest.fn(async () => {});
 jest.mock('../../src/ui/hooks/useSupabase', () => ({ useRepositories: () => ({
-    weightRepo: { getWeightHistory: mockWeightHistory, saveWeightRecord: mockSaveWeight },
+    weightRepo: {
+        getWeightHistory: mockWeightHistory,
+        saveWeightRecord: mockSaveWeight,
+        updateWeightRecord: mockUpdateWeight,
+        deleteWeightRecord: mockDeleteWeight,
+    },
     workoutRepo: { getWorkoutSessions: mockHistory, saveWorkoutSession: mockSaveSession },
     mealConsumptionRepo: {
         getMealConsumptions: mockMealConsumptions,
@@ -21,6 +29,9 @@ jest.mock('../../src/ui/hooks/useSupabase', () => ({ useRepositories: () => ({
 }) }));
 jest.mock('../../src/ui/utils/dialogs', () => ({ confirmAsync: jest.fn(async () => true) }));
 jest.mock('../../src/ui/hooks/useAuth', () => ({ useAuth: () => ({ session: null }) }));
+jest.mock('expo-router', () => ({
+    useFocusEffect: (callback: () => void) => require('react').useEffect(callback, [callback]),
+}));
 
 const HistoryScreen = require('../(tabs)/history').default;
 
@@ -28,8 +39,46 @@ beforeEach(() => {
     mockHistory.mockResolvedValue([]);
     mockWeightHistory.mockResolvedValue([]);
     mockSaveWeight.mockClear();
+    mockUpdateWeight.mockClear();
+    mockDeleteWeight.mockClear();
     mockMealConsumptions.mockResolvedValue([]);
     jest.clearAllMocks();
+});
+
+it('records an independent body-fat reading without creating a weight reading', async () => {
+    const screen = render(<HistoryScreen />);
+    await waitFor(() => screen.getByText('+ Registrar Peso'));
+    fireEvent.press(screen.getByText('+ Registrar Peso'));
+    fireEvent.changeText(screen.getByPlaceholderText('Ex: 18.5'), '18,5');
+    fireEvent.press(screen.getByText('Salvar'));
+    await waitFor(() => expect(mockSaveWeight).toHaveBeenCalledWith(expect.objectContaining({
+        weightKg: null,
+        bodyFatPercentage: 18.5,
+        proteinPercentage: null,
+    })));
+});
+
+it('corrects one dated measurement and deletes only after confirmation', async () => {
+    const record = {
+        id: 'weight-1', userId: 'user', weightKg: 74.5, bodyFatPercentage: 18.5,
+        proteinPercentage: null, recordedAt: new Date(2026, 9, 20, 8, 30),
+    };
+    mockWeightHistory.mockResolvedValue([record]);
+    const screen = render(<HistoryScreen />);
+    await waitFor(() => screen.getByText('Corrigir medição'));
+    fireEvent.press(screen.getByText('Corrigir medição'));
+    fireEvent.changeText(screen.getByDisplayValue('74.5'), '73,5');
+    fireEvent.changeText(screen.getByDisplayValue('20/10/2026'), '19/10/2026');
+    fireEvent.press(screen.getByText('Salvar medição'));
+    await waitFor(() => expect(mockUpdateWeight).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'weight-1',
+        weightKg: 73.5,
+        recordedAt: expect.any(Date),
+    })));
+    expect(mockUpdateWeight.mock.calls[0][0].recordedAt.getDate()).toBe(19);
+
+    fireEvent.press(screen.getByText('Excluir medição'));
+    await waitFor(() => expect(mockDeleteWeight).toHaveBeenCalledWith('weight-1'));
 });
 
 it('records a pt-BR decimal weight without truncating the fractional part', async () => {

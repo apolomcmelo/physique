@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
     View,
     ScrollView,
@@ -19,7 +20,9 @@ import { Colors, Spacing, Typography } from '../../src/ui/theme';
 import { WeightRecord } from '../../src/domain/entities/WeightRecord';
 import { WorkoutSession } from '../../src/domain/entities/WorkoutSession';
 import { MealConsumption, MealConsumptionStatus } from '../../src/domain/entities/MealConsumption';
+import { createWeightRecord } from '../../src/domain/entities/WeightRecord';
 import { recordWeight } from '../../src/domain/use-cases/weight/RecordWeight';
+import { formatWeightDateInput, formatWeightTimeInput, parseWeightDateTimeInput } from '../../src/domain/use-cases/weight/WeightRecordInput';
 import { parseLocalizedDecimal } from '../../src/domain/value-objects/LocalizedDecimal';
 import { formatMealDateInput, formatMealTimeInput, parseMealDateTime } from '../../src/domain/use-cases/meal/MealConsumptionInput';
 import { confirmAsync } from '../../src/ui/utils/dialogs';
@@ -56,10 +59,18 @@ export default function HistoryScreen() {
     const [bodyFatInput, setBodyFatInput] = useState('');
     const [proteinInput, setProteinInput] = useState('');
     const [savingWeight, setSavingWeight] = useState(false);
+    const [weightDateInput, setWeightDateInput] = useState(formatWeightDateInput(new Date()));
+    const [weightTimeInput, setWeightTimeInput] = useState(formatWeightTimeInput(new Date()));
+    const [editingWeightId, setEditingWeightId] = useState<string | null>(null);
+    const [editWeightValue, setEditWeightValue] = useState('');
+    const [editBodyFatValue, setEditBodyFatValue] = useState('');
+    const [editProteinValue, setEditProteinValue] = useState('');
+    const [editWeightDate, setEditWeightDate] = useState('');
+    const [editWeightTime, setEditWeightTime] = useState('');
 
-    useEffect(() => {
+    useFocusEffect(useCallback(() => {
         loadAll();
-    }, []);
+    }, []));
 
     async function loadAll() {
         try {
@@ -126,18 +137,25 @@ export default function HistoryScreen() {
     }
 
     async function handleLogWeight() {
-        const kg = parseLocalizedDecimal(weightInput);
+        const kg = weightInput.trim() ? parseLocalizedDecimal(weightInput) : null;
         const bf = bodyFatInput.trim() ? parseLocalizedDecimal(bodyFatInput) : null;
         const prot = proteinInput.trim() ? parseLocalizedDecimal(proteinInput) : null;
-        if (kg === null || (bodyFatInput.trim() && bf === null) || (proteinInput.trim() && prot === null)) {
+        const recordedAt = parseWeightDateTimeInput(weightDateInput, weightTimeInput);
+        if ((weightInput.trim() && kg === null) || (bodyFatInput.trim() && bf === null)
+            || (proteinInput.trim() && prot === null)) {
             setError('Informe números válidos; use vírgula ou ponto como separador decimal.');
             return;
         }
-        if (kg <= 0) { setError('O peso deve ser maior que zero'); return; }
+        if (kg === null && bf === null && prot === null) {
+            setError('Informe ao menos uma medição.');
+            return;
+        }
+        if (kg !== null && kg <= 0) { setError('O peso deve ser maior que zero'); return; }
         if ((bf !== null && (bf < 0 || bf > 100)) || (prot !== null && (prot < 0 || prot > 100))) {
             setError('Percentuais devem estar entre 0 e 100');
             return;
         }
+        if (!recordedAt) { setError('Informe uma data e horário válidos (DD/MM/AAAA e HH:MM).'); return; }
         try {
             setSavingWeight(true);
             setError(null);
@@ -146,17 +164,73 @@ export default function HistoryScreen() {
                 setError('É necessário estar logado para registrar peso');
                 return;
             }
-            await recordWeight(weightRepo, userId, kg, bf, prot);
+            await recordWeight(weightRepo, userId, kg, bf, prot, recordedAt);
             const updated = await weightRepo.getWeightHistory();
             setWeightHistory(updated.sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime()));
             setWeightInput('');
             setBodyFatInput('');
             setProteinInput('');
+            const now = new Date();
+            setWeightDateInput(formatWeightDateInput(now));
+            setWeightTimeInput(formatWeightTimeInput(now));
             setShowWeightForm(false);
-        } catch {
-            setError('Erro ao registrar peso');
+        } catch (cause) {
+            console.error('[history] weight measurement save failed', { error: cause });
+            setError(cause instanceof Error ? cause.message : 'Erro ao registrar medição.');
         } finally {
             setSavingWeight(false);
+        }
+    }
+
+    function beginWeightCorrection(record: WeightRecord) {
+        setEditingWeightId(record.id);
+        setEditWeightValue(record.weightKg === null ? '' : String(record.weightKg));
+        setEditBodyFatValue(record.bodyFatPercentage === null ? '' : String(record.bodyFatPercentage));
+        setEditProteinValue(record.proteinPercentage === null ? '' : String(record.proteinPercentage));
+        setEditWeightDate(formatWeightDateInput(record.recordedAt));
+        setEditWeightTime(formatWeightTimeInput(record.recordedAt));
+    }
+
+    async function saveWeightCorrection(record: WeightRecord) {
+        const weight = editWeightValue.trim() ? parseLocalizedDecimal(editWeightValue) : null;
+        const bodyFat = editBodyFatValue.trim() ? parseLocalizedDecimal(editBodyFatValue) : null;
+        const proteinValue = editProteinValue.trim() ? parseLocalizedDecimal(editProteinValue) : null;
+        const recordedAt = parseWeightDateTimeInput(editWeightDate, editWeightTime);
+        if ((editWeightValue.trim() && weight === null) || (editBodyFatValue.trim() && bodyFat === null)
+            || (editProteinValue.trim() && proteinValue === null)) {
+            setError('Informe números válidos; use vírgula ou ponto como separador decimal.');
+            return;
+        }
+        if (!recordedAt) { setError('Informe uma data e horário válidos (DD/MM/AAAA e HH:MM).'); return; }
+        try {
+            const validated = createWeightRecord({
+                ...record,
+                weightKg: weight,
+                bodyFatPercentage: bodyFat,
+                proteinPercentage: proteinValue,
+                recordedAt,
+            });
+            const updated = { ...validated, id: record.id };
+            await weightRepo.updateWeightRecord(updated);
+            setWeightHistory((current) => current.map((item) => item.id === record.id ? updated : item)
+                .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime()));
+            setEditingWeightId(null);
+            setError(null);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'Erro ao corrigir medição.');
+        }
+    }
+
+    async function deleteWeight(record: WeightRecord) {
+        const confirmed = await confirmAsync('Excluir medição?', `A leitura de ${formatDate(record.recordedAt)} será removida do histórico.`);
+        if (!confirmed) return;
+        try {
+            await weightRepo.deleteWeightRecord(record.id);
+            setWeightHistory((current) => current.filter((item) => item.id !== record.id));
+            if (editingWeightId === record.id) setEditingWeightId(null);
+            setError(null);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'Erro ao excluir medição.');
         }
     }
 
@@ -289,6 +363,10 @@ export default function HistoryScreen() {
                                     keyboardType="decimal-pad"
                                     style={{ marginTop: Spacing.sm }}
                                 />
+                                <Input label="Data da medição" placeholder="DD/MM/AAAA" value={weightDateInput}
+                                    onChangeText={setWeightDateInput} style={{ marginTop: Spacing.sm }} />
+                                <Input label="Horário" placeholder="HH:MM" value={weightTimeInput}
+                                    onChangeText={setWeightTimeInput} style={{ marginTop: Spacing.sm }} />
                                 <Button
                                     label="Salvar"
                                     onPress={handleLogWeight}
@@ -305,13 +383,16 @@ export default function HistoryScreen() {
                                 <Card key={record.id} style={styles.historyCard}>
                                     <View style={styles.historyRow}>
                                         <TypographyText variant="h4" color={Colors.textPrimary}>
-                                            {record.weightKg.toLocaleString('pt-BR')} kg
+                                            {record.weightKg !== null ? `${record.weightKg.toLocaleString('pt-BR')} kg` : 'Medição corporal'}
                                         </TypographyText>
                                         <TypographyText variant="bodySmall" color={Colors.textSecondary}>
-                                            {formatDate(record.recordedAt)}
+                                            {formatDate(record.recordedAt)} {formatWeightTimeInput(record.recordedAt)}
                                         </TypographyText>
                                     </View>
                                     <View style={styles.historyRow}>
+                                        {record.weightKg !== null && <TypographyText variant="bodySmall" color={Colors.textSecondary}>
+                                            Peso: {record.weightKg.toLocaleString('pt-BR')} kg
+                                        </TypographyText>}
                                         {record.bodyFatPercentage !== null && (
                                             <TypographyText variant="bodySmall" color={Colors.textSecondary}>
                                                 Gordura: {record.bodyFatPercentage.toLocaleString('pt-BR')}%
@@ -323,6 +404,24 @@ export default function HistoryScreen() {
                                             </TypographyText>
                                         )}
                                     </View>
+                                    {editingWeightId === record.id ? (
+                                        <View>
+                                            <Input label="Peso (kg)" value={editWeightValue} onChangeText={setEditWeightValue} keyboardType="decimal-pad" />
+                                            <Input label="Gordura Corporal (%)" value={editBodyFatValue} onChangeText={setEditBodyFatValue} keyboardType="decimal-pad" />
+                                            <Input label="Proteína (%)" value={editProteinValue} onChangeText={setEditProteinValue} keyboardType="decimal-pad" />
+                                            <Input label="Data da medição" value={editWeightDate} onChangeText={setEditWeightDate} placeholder="DD/MM/AAAA" />
+                                            <Input label="Horário" value={editWeightTime} onChangeText={setEditWeightTime} placeholder="HH:MM" />
+                                            <View style={styles.historyRow}>
+                                                <Button label="Salvar medição" onPress={() => saveWeightCorrection(record)} />
+                                                <Button label="Cancelar correção" variant="ghost" onPress={() => setEditingWeightId(null)} />
+                                            </View>
+                                        </View>
+                                    ) : (
+                                        <View style={styles.historyRow}>
+                                            <Button label="Corrigir medição" variant="ghost" onPress={() => beginWeightCorrection(record)} />
+                                            <Button label="Excluir medição" variant="ghost" onPress={() => deleteWeight(record)} />
+                                        </View>
+                                    )}
                                 </Card>
                             ))
                         )}

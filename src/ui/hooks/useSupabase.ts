@@ -6,6 +6,7 @@ import { IMealConsumptionRepository } from '../../domain/ports/MealConsumptionRe
 import { IExamRepository } from '../../domain/ports/ExamRepository';
 import { IPhotoRepository } from '../../domain/ports/PhotoRepository';
 import { IWeightRepository } from '../../domain/ports/WeightRepository';
+import { IWeightGoalRepository } from '../../domain/ports/WeightGoalRepository';
 import { IFoodItemRepository } from '../../domain/ports/FoodItemRepository';
 
 interface Repositories {
@@ -16,6 +17,7 @@ interface Repositories {
     examRepo: IExamRepository;
     photoRepo: IPhotoRepository;
     weightRepo: IWeightRepository;
+    weightGoalRepo: IWeightGoalRepository;
     foodRepo: IFoodItemRepository;
 }
 
@@ -28,6 +30,7 @@ function createRepositories(): Repositories {
         const { LocalExamRepository } = require('../../adapters/local/LocalExamRepository');
         const { LocalPhotoRepository } = require('../../adapters/local/LocalPhotoRepository');
         const { LocalWeightRepository } = require('../../adapters/local/LocalWeightRepository');
+        const { LocalWeightGoalRepository } = require('../../adapters/local/LocalWeightGoalRepository');
         const { LocalFoodItemRepository } = require('../../adapters/local/LocalFoodItemRepository');
         return {
             userRepo: new LocalUserRepository() as IUserRepository,
@@ -37,6 +40,7 @@ function createRepositories(): Repositories {
             examRepo: new LocalExamRepository() as IExamRepository,
             photoRepo: new LocalPhotoRepository() as IPhotoRepository,
             weightRepo: new LocalWeightRepository() as IWeightRepository,
+            weightGoalRepo: new LocalWeightGoalRepository() as IWeightGoalRepository,
             foodRepo: new LocalFoodItemRepository() as IFoodItemRepository,
         };
     }
@@ -47,6 +51,7 @@ function createRepositories(): Repositories {
     const { SupabaseExamRepository } = require('../../adapters/supabase/SupabaseExamRepository');
     const { SupabasePhotoRepository } = require('../../adapters/supabase/SupabasePhotoRepository');
     const { SupabaseWeightRepository } = require('../../adapters/supabase/SupabaseWeightRepository');
+    const { SupabaseWeightGoalRepository } = require('../../adapters/supabase/SupabaseWeightGoalRepository');
     const { SupabaseFoodItemRepository } = require('../../adapters/supabase/SupabaseFoodItemRepository');
     return {
         userRepo: new SupabaseUserRepository() as IUserRepository,
@@ -56,6 +61,7 @@ function createRepositories(): Repositories {
         examRepo: new SupabaseExamRepository() as IExamRepository,
         photoRepo: new SupabasePhotoRepository() as IPhotoRepository,
         weightRepo: new SupabaseWeightRepository() as IWeightRepository,
+        weightGoalRepo: new SupabaseWeightGoalRepository() as IWeightGoalRepository,
         foodRepo: new SupabaseFoodItemRepository() as IFoodItemRepository,
     };
 }

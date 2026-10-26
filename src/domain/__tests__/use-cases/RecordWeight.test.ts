@@ -10,6 +10,8 @@ function makeRepo(latest: WeightRecord | null = null): IWeightRepository & { sav
         saveWeightRecord: jest.fn(async (record: WeightRecord) => {
             saved.push(record);
         }),
+        updateWeightRecord: jest.fn(async () => {}),
+        deleteWeightRecord: jest.fn(async () => {}),
         getLatestWeight: jest.fn(async () => latest),
     };
 }

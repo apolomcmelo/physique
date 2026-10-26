@@ -59,6 +59,20 @@ describe('generateReviewPrompt', () => {
         expect(result).toContain(`${mockWeightRecord.weightKg}kg`);
     });
 
+    it('uses the latest value per indicator and does not fall back to profile measurements', () => {
+        const bodyFatOnly = {
+            ...mockWeightRecord,
+            id: 'body-fat-only',
+            weightKg: null,
+            bodyFatPercentage: 17.5,
+            recordedAt: new Date('2026-10-25T10:00:00.000Z'),
+        };
+        const prompt = generateReviewPrompt(mockUser, [bodyFatOnly], [], [], [], []);
+        expect(prompt).toContain('Current Weight: Unknown kg');
+        expect(prompt).toContain('Body Fat Percentage: 17.5%');
+        expect(prompt).toContain('Weight History\n- 2026-10-25: 17.5% body fat');
+    });
+
     it('contains workout session count', () => {
         // The summary includes "${s.sets.length} sets completed"
         expect(result).toContain(`${mockWorkoutSession.sets.length} sets completed`);

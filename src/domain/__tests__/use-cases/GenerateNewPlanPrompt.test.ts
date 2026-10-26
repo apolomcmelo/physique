@@ -13,8 +13,8 @@ describe('generateNewPlanPrompt', () => {
         expect(result).toContain(mockUser.name);
     });
 
-    it("contains user's current weight in the output", () => {
-        expect(result).toContain(String(mockUser.currentWeight));
+    it('does not claim the profile weight is a current measurement when history is empty', () => {
+        expect(result).toContain('Current Weight: Unknown kg');
     });
 
     it("contains user's goal weight in the output", () => {
