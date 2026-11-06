@@ -7,8 +7,11 @@ import {
     TouchableOpacity,
     TextInput,
     Alert,
+    ScrollView,
+    useWindowDimensions,
     View
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Exercise, Workout } from '../../src/domain/entities/Workout';
@@ -24,16 +27,26 @@ import { Button } from '../../src/ui/components/Button';
 import { Typography as TypographyText } from '../../src/ui/components/Typography';
 import { WorkoutTimer } from '../../src/ui/components/WorkoutTimer';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
+import { ActiveSetCard } from '../../src/ui/components/workout/ActiveSetCard';
+import { RestCard } from '../../src/ui/components/workout/RestCard';
+import { SessionHeader } from '../../src/ui/components/workout/SessionHeader';
+import { QueueAction, SessionQueue } from '../../src/ui/components/workout/SessionQueue';
+import { SessionTopBar } from '../../src/ui/components/workout/SessionTopBar';
 import { Colors, Radius, Spacing, Typography } from '../../src/ui/theme';
+import { sessionProgress, setTarget } from '../../src/ui/utils/sessionProgress';
 
 const DEFAULT_REST_DURATION = 60;
 const REST_DURATION_STEP = 15;
 const MIN_REST_DURATION = 0;
 const MAX_REST_DURATION = 300;
+const WEIGHT_STEP = 1;
+const WIDE_BREAKPOINT = 1024;
 
 export default function ActiveWorkoutScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { workoutRepo } = useRepositories();
+    const wide = useWindowDimensions().width >= WIDE_BREAKPOINT;
+    const [keepAwake, setKeepAwake] = useState(true);
 
     const [workout, setWorkout] = useState<Workout | null>(null);
     const [session, setSession] = useState<WorkoutSession | null>(null);
@@ -77,7 +90,7 @@ export default function ActiveWorkoutScreen() {
     }, [id]);
 
     useEffect(() => {
-        if (!session) return;
+        if (!session || !keepAwake) return;
         let enabled = false;
         let mounted = true;
         void activateKeepAwakeAsync('active-workout').then(() => {
@@ -87,7 +100,7 @@ export default function ActiveWorkoutScreen() {
             console.warn('[workout] keep-awake activation failed', cause);
         });
         return () => { mounted = false; if (enabled) deactivateKeepAwake('active-workout'); };
-    }, [session?.id]);
+    }, [session?.id, keepAwake]);
 
     async function initWorkout(workoutId: string) {
         try {
@@ -355,324 +368,185 @@ export default function ActiveWorkoutScreen() {
         </View></SafeAreaView>;
     }
 
+    const progress = sessionProgress(workout.exercises, setsRecorded);
+    const isPlainTimedSet = !resting && setTimerRunning && setDuration !== null && currentExercise !== null;
+    const finalRecordedLabel = isLastExercise && isLastSet;
+    const primaryLabel = `Concluir Série ${currentSetNumber} de ${totalSets}${finalRecordedLabel || restDuration === 0 ? '' : ' (Iniciar Descanso)'}`;
+    const startTimedSet = () => {
+        if (!setDuration) return;
+        setStartedAtRef.current = Date.now();
+        setSetDeadline(Date.now() + setDuration * 1000);
+        setSetTimerRunning(true);
+    };
+
+    const setCard = currentExercise && (
+        <ActiveSetCard
+            setNumber={currentSetNumber}
+            totalSets={totalSets}
+            target={setTarget(currentExercise)}
+            reps={currentExercise.durationSeconds == null
+                ? { value: actualReps, onChange: setActualReps, onStep: (direction) => setActualReps((value) => String(Math.max(0, (parseInt(value, 10) || 0) + direction))) }
+                : undefined}
+            durationLabel={setDuration ? formatDurationLabel(setDuration) : null}
+            weight={{
+                label: currentExercise.durationSeconds != null && currentExercise.weightKg == null ? 'CARGA (opcional, kg)' : 'Carga Atual',
+                value: actualWeight,
+                onChange: setActualWeight,
+                onStep: (direction) => setActualWeight((value) => stepWeight(value, direction)),
+            }}
+        >
+            {isWorkoutComplete && setDuration !== null && (
+                <View>
+                    <TextInput accessibilityLabel="Duração realizada em segundos" value={actualDuration} onChangeText={setActualDuration} keyboardType="number-pad" style={styles.correctionInput} />
+                    <Button label="Corrigir série" onPress={handleCorrectSet} />
+                </View>
+            )}
+
+            {isPlainTimedSet && currentExercise && (
+                <View style={styles.timedSet}>
+                    <TypographyText variant="label" color={Colors.textSecondary}>SÉRIE EM ANDAMENTO</TypographyText>
+                    <WorkoutTimer
+                        key={`${currentExercise.id}-${setIndex}`}
+                        durationSeconds={setDuration ?? 0}
+                        deadline={setDeadline ?? undefined}
+                        onComplete={handleTimedSetExpired}
+                        autoStart
+                    >
+                        {({ display }) => <Text style={styles.timedDigits}>{display}</Text>}
+                    </WorkoutTimer>
+                </View>
+            )}
+
+            {error && (
+                <TypographyText variant="bodySmall" color={Colors.error}>{error}</TypographyText>
+            )}
+
+            {!resting && !isWorkoutComplete && !setTimerRunning && setDuration && (
+                <TouchableOpacity style={styles.mainBtn} onPress={startTimedSet}>
+                    <Ionicons name="play" size={22} color={Colors.onPrimary} />
+                    <Text style={styles.mainBtnText}>Iniciar Série</Text>
+                </TouchableOpacity>
+            )}
+
+            {!resting && !isWorkoutComplete && (setTimerRunning || !setDuration) && (
+                <TouchableOpacity style={styles.mainBtn} onPress={handleCompleteSet} disabled={setSaving}>
+                    <Ionicons name="checkmark-circle" size={24} color={Colors.onPrimary} />
+                    <Text style={styles.mainBtnText}>{primaryLabel}</Text>
+                </TouchableOpacity>
+            )}
+
+            {!resting && isWorkoutComplete && (
+                <Button label="Finalizar Treino" onPress={handleFinishWorkout} loading={finishing} style={styles.finishBtn} />
+            )}
+        </ActiveSetCard>
+    );
+
+    const restCard = !isWorkoutComplete && (
+        <RestCard
+            resting={resting}
+            expired={restExpired}
+            duration={restDuration}
+            deadline={restDeadline}
+            canAdjust={!setTimerRunning}
+            minDuration={MIN_REST_DURATION}
+            maxDuration={MAX_REST_DURATION}
+            step={REST_DURATION_STEP}
+            onAdjust={adjustRestDuration}
+            onExpire={() => setRestExpired(true)}
+            onSkip={handleRestComplete}
+            onContinue={handleRestComplete}
+        />
+    );
+
+    const queue = currentExercise && (
+        <>
+            <SessionQueue
+                exercises={workout.exercises}
+                currentIndex={exerciseIndex}
+                finalSetRecorded={finalSetRecorded}
+                currentSet={currentSetNumber}
+                totalSets={totalSets}
+                currentWeight={actualWeight}
+            />
+            {session && (!isWorkoutComplete || showExitActions) && (
+                <QueueAction label="Salvar parcial" onPress={handleSavePartial} loading={finishing} />
+            )}
+            {showExitActions && (
+                <>
+                    <QueueAction label="Retomar" onPress={() => setShowExitActions(false)} />
+                    <QueueAction label="Descartar" onPress={handleDiscard} danger />
+                </>
+            )}
+        </>
+    );
+
     return (
         <SafeAreaView style={styles.safe}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => setShowExitActions((shown) => !shown)} style={styles.backBtn}>
-                    <Text style={[Typography.h4, { color: Colors.textSecondary }]}>← Voltar</Text>
-                </TouchableOpacity>
-                <TypographyText variant="h3" color={Colors.textPrimary}>
-                    {workout.name}
-                </TypographyText>
-                <View style={{ width: 60 }} />
-            </View>
-
-            {/* Exercise Progress */}
-            <View style={styles.progressBar}>
-                {workout.exercises.map((_, i) => (
-                    <View
-                        key={i}
-                        style={[
-                            styles.progressDot,
-                            i === exerciseIndex && styles.progressDotActive,
-                            i < exerciseIndex && styles.progressDotDone,
-                        ]}
-                    />
-                ))}
-            </View>
-            <TypographyText variant="bodySmall" color={Colors.textSecondary} style={{ textAlign: 'center' }}>
-                {setsRecorded} séries registradas
-            </TypographyText>
-
-            {/* Main Content */}
-            <View style={styles.body}>
+            <SessionTopBar
+                workoutName={workout.name}
+                startedAt={session?.startedAt ?? new Date()}
+                keepAwake={keepAwake}
+                onToggleKeepAwake={() => setKeepAwake((enabled) => !enabled)}
+                onBack={() => setShowExitActions((shown) => !shown)}
+            />
+            <ScrollView contentContainerStyle={[styles.scroll, wide && styles.scrollWide]}>
                 {currentExercise && (
-                    <>
-                        <TypographyText variant="label" color={Colors.textSecondary}>
-                            EXERCÍCIO {exerciseIndex + 1} / {workout.exercises.length}
-                        </TypographyText>
-                        <TypographyText variant="h1" color={Colors.textPrimary} style={styles.exerciseName}>
-                            {currentExercise.name}
-                        </TypographyText>
-                        <TypographyText variant="bodySmall" color={Colors.textSecondary}>
-                            Próximo: {workout.exercises[exerciseIndex + 1]?.name ?? 'Finalização'}
-                        </TypographyText>
-
-                        <View style={styles.setInfo}>
-                            <View style={styles.setChip}>
-                                <TypographyText variant="h2" color={Colors.primary}>
-                                    Série {currentSetNumber}
-                                </TypographyText>
-                                <TypographyText variant="body" color={Colors.textSecondary}>
-                                    de {totalSets}
-                                </TypographyText>
-                            </View>
-                        </View>
-
-                        <View style={styles.statsRow}>
-                            {currentExercise.durationSeconds == null && (
-                                <View style={styles.statBox}>
-                                    <TypographyText variant="label" color={Colors.textDisabled}>
-                                        REPS (previsto: {currentExercise.repsPerSet ?? 0})
-                                    </TypographyText>
-                                    <TextInput accessibilityLabel="Repetições realizadas" value={actualReps} onChangeText={setActualReps} keyboardType="number-pad" style={{ color: Colors.textPrimary, fontSize: 22 }} />
-                                </View>
-                            )}
-                            {setDuration && (
-                                <View style={styles.statBox}>
-                                    <TypographyText variant="label" color={Colors.textDisabled}>
-                                        DURAÇÃO
-                                    </TypographyText>
-                                    <TypographyText variant="h2" color={Colors.textPrimary}>
-                                        {setDuration >= 60
-                                            ? `${Math.floor(setDuration / 60)}:${String(setDuration % 60).padStart(2, '0')}min`
-                                            : `${setDuration}s`}
-                                    </TypographyText>
-                                </View>
-                            )}
-                            <View style={styles.statBox}>
-                                <TypographyText variant="label" color={Colors.textDisabled}>
-                                    {currentExercise.durationSeconds != null && currentExercise.weightKg == null
-                                        ? 'CARGA (opcional, kg)'
-                                        : `PESO (previsto: ${currentExercise.weightKg ?? 0} kg)`}
-                                </TypographyText>
-                                <TextInput accessibilityLabel="Carga realizada em kg" value={actualWeight} onChangeText={setActualWeight} keyboardType="decimal-pad" style={{ color: Colors.textPrimary, fontSize: 22 }} />
-                            </View>
-                        </View>
-
-                        {isWorkoutComplete && setDuration !== null && (
-                            <View>
-                                <TextInput accessibilityLabel="Duração realizada em segundos" value={actualDuration} onChangeText={setActualDuration} keyboardType="number-pad" style={{ color: Colors.textPrimary, fontSize: 20 }} />
-                                <Button label="Corrigir série" onPress={handleCorrectSet} />
-                            </View>
-                        )}
-
-                        {!setTimerRunning && !isWorkoutComplete && (
-                            <View style={styles.restControls}>
-                                <TouchableOpacity
-                                    accessibilityLabel="Diminuir descanso em 15 segundos"
-                                    disabled={restDuration <= MIN_REST_DURATION}
-                                    onPress={() => adjustRestDuration(-REST_DURATION_STEP)}
-                                    style={[
-                                        styles.restAdjustBtn,
-                                        restDuration <= MIN_REST_DURATION && styles.restAdjustBtnDisabled,
-                                    ]}
-                                >
-                                    <Text style={[Typography.h3, { color: Colors.textPrimary }]}>-</Text>
-                                </TouchableOpacity>
-                                <TypographyText variant="body" color={Colors.textSecondary} style={styles.restDurationText}>
-                                    Descanso {restDuration}s
-                                </TypographyText>
-                                <TouchableOpacity
-                                    accessibilityLabel="Aumentar descanso em 15 segundos"
-                                    disabled={restDuration >= MAX_REST_DURATION}
-                                    onPress={() => adjustRestDuration(REST_DURATION_STEP)}
-                                    style={[
-                                        styles.restAdjustBtn,
-                                        restDuration >= MAX_REST_DURATION && styles.restAdjustBtnDisabled,
-                                    ]}
-                                >
-                                    <Text style={[Typography.h3, { color: Colors.textPrimary }]}>+</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    </>
-                )}
-
-                {/* Working-set timer (time-based exercises) */}
-                {!resting && setTimerRunning && setDuration && currentExercise && (
-                    <View style={styles.timerContainer}>
-                        <TypographyText variant="label" color={Colors.textSecondary} style={{ marginBottom: Spacing.sm }}>
-                            SÉRIE EM ANDAMENTO
-                        </TypographyText>
-                        <WorkoutTimer
-                            key={`${currentExercise.id}-${setIndex}`}
-                            durationSeconds={setDuration}
-                            deadline={setDeadline ?? undefined}
-                            onComplete={handleTimedSetExpired}
-                            autoStart
-                        />
-                    </View>
-                )}
-
-                {/* Rest Timer */}
-                {resting && (
-                    <View style={styles.timerContainer}>
-                        <TypographyText variant="label" color={Colors.textSecondary} style={{ marginBottom: Spacing.sm }}>
-                            DESCANSO
-                        </TypographyText>
-                        {!restExpired && <WorkoutTimer
-                            durationSeconds={restDuration}
-                            deadline={restDeadline ?? undefined}
-                            onComplete={() => setRestExpired(true)}
-                            autoStart
-                        />}
-                        {restExpired ? <Button label="Continuar após descanso" onPress={handleRestComplete} />
-                            : <TouchableOpacity onPress={handleRestComplete} accessibilityLabel="Pular descanso" style={styles.skipBtn}>
-                                <Text style={[Typography.label, { color: Colors.textSecondary }]}>PULAR DESCANSO</Text>
-                            </TouchableOpacity>}
-                    </View>
-                )}
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.footer}>
-                {showExitActions && (
-                    <View>
-                        <Button label="Retomar" onPress={() => setShowExitActions(false)} />
-                        <Button label="Salvar parcial" onPress={handleSavePartial} loading={finishing} />
-                        <Button label="Descartar" onPress={handleDiscard} />
-                    </View>
-                )}
-                {!showExitActions && session && !isWorkoutComplete && (
-                    <Button label="Salvar parcial" onPress={handleSavePartial} loading={finishing} />
-                )}
-                {error && (
-                    <TypographyText variant="bodySmall" color={Colors.error} style={{ marginBottom: Spacing.sm }}>
-                        {error}
-                    </TypographyText>
-                )}
-
-                {!resting && !isWorkoutComplete && !setTimerRunning && setDuration && (
-                    <TouchableOpacity style={styles.mainBtn} onPress={() => { setStartedAtRef.current = Date.now(); setSetDeadline(Date.now() + setDuration * 1000); setSetTimerRunning(true); }}>
-                        <Text style={[Typography.h3, { color: Colors.onPrimary }]}>▶ Iniciar Série</Text>
-                    </TouchableOpacity>
-                )}
-
-                {!resting && !isWorkoutComplete && (setTimerRunning || !setDuration) && (
-                    <TouchableOpacity style={styles.mainBtn} onPress={handleCompleteSet} disabled={setSaving}>
-                        <Text style={[Typography.h3, { color: Colors.onPrimary }]}>✓ Terminei a Série</Text>
-                    </TouchableOpacity>
-                )}
-
-                {!resting && isWorkoutComplete && (
-                    <Button
-                        label="Finalizar Treino 🏁"
-                        onPress={handleFinishWorkout}
-                        loading={finishing}
-                        style={styles.finishBtn}
+                    <SessionHeader
+                        exerciseName={currentExercise.name}
+                        exerciseNumber={exerciseIndex + 1}
+                        exerciseCount={workout.exercises.length}
+                        percent={progress.percent}
+                        currentSet={progress.currentSet}
+                        totalSets={progress.totalSets}
+                        setsRecorded={setsRecorded}
                     />
                 )}
-            </View>
+                <View style={[styles.columns, wide && styles.columnsWide]}>
+                    <View style={[styles.column, wide && styles.mainColumn]}>
+                        {setCard}
+                        {restCard}
+                    </View>
+                    <View style={[styles.column, wide && styles.sideColumn]}>{queue}</View>
+                </View>
+            </ScrollView>
         </SafeAreaView>
     );
+}
+
+function formatDurationLabel(seconds: number): string {
+    return seconds >= 60 ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}min` : `${seconds}s`;
+}
+
+function stepWeight(value: string, direction: 1 | -1): string {
+    const current = value.trim() ? parseLocalizedDecimal(value) ?? 0 : 0;
+    const next = Math.max(0, Math.round((current + direction * WEIGHT_STEP) * 10) / 10);
+    return String(next).replace('.', ',');
 }
 
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: Colors.background },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: Spacing.md,
-        paddingTop: Spacing.md,
-        paddingBottom: Spacing.sm,
-    },
-    backBtn: { width: 60 },
-    progressBar: {
-        flexDirection: 'row',
-        gap: 6,
-        paddingHorizontal: Spacing.md,
-        marginBottom: Spacing.md,
-    },
-    progressDot: {
-        flex: 1,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: Colors.border,
-    },
-    progressDotActive: { backgroundColor: Colors.primary },
-    progressDotDone: { backgroundColor: Colors.primaryLight },
-    body: {
-        flex: 1,
-        paddingHorizontal: Spacing.md,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: Spacing.sm,
-    },
-    exerciseName: {
-        textAlign: 'center',
-        marginTop: Spacing.sm,
-        marginBottom: Spacing.lg,
-        maxWidth: '100%',
-    },
-    setInfo: {
-        alignItems: 'center',
-        marginBottom: Spacing.xl,
-    },
-    setChip: {
-        alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderRadius: Radius.lg,
-        paddingHorizontal: Spacing.xl,
-        paddingVertical: Spacing.lg,
-        borderWidth: 2,
-        borderColor: Colors.primary,
-        width: '100%',
-        maxWidth: 280,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        gap: Spacing.sm,
-        marginTop: Spacing.md,
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-    },
-    statBox: {
-        alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderRadius: Radius.md,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.md,
-        minWidth: 90,
-        flexBasis: '30%',
-        flexGrow: 1,
-    },
-    timerContainer: {
-        alignItems: 'center',
-        marginTop: Spacing.xl,
-    },
-    restControls: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: Spacing.md,
-    },
-    restAdjustBtn: {
-        width: 44,
-        height: 44,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: Radius.sm,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    restAdjustBtnDisabled: {
-        opacity: 0.4,
-    },
-    restDurationText: {
-        minWidth: 72,
-        textAlign: 'center',
-    },
-    skipBtn: {
-        marginTop: Spacing.md,
-        paddingVertical: Spacing.sm,
-        paddingHorizontal: Spacing.lg,
-        borderRadius: Radius.sm,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    footer: {
-        padding: Spacing.md,
-        paddingBottom: Spacing.lg,
-    },
+    scroll: { padding: Spacing.md, gap: Spacing.lg, paddingBottom: Spacing.xxl },
+    scrollWide: { padding: Spacing.xl, width: '100%', maxWidth: 1440, alignSelf: 'center' },
+    columns: { gap: Spacing.lg },
+    columnsWide: { flexDirection: 'row', alignItems: 'flex-start' },
+    column: { gap: Spacing.lg },
+    mainColumn: { flex: 2 },
+    sideColumn: { flex: 1 },
+    timedSet: { alignItems: 'center', gap: Spacing.sm },
+    timedDigits: { ...Typography.display, color: Colors.primary },
+    correctionInput: { color: Colors.textPrimary, fontSize: 20, marginBottom: Spacing.sm },
     mainBtn: {
-        backgroundColor: Colors.primary,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.sm,
+        backgroundColor: Colors.success,
         borderRadius: Radius.lg,
         paddingVertical: Spacing.lg,
-        alignItems: 'center',
+        paddingHorizontal: Spacing.lg,
     },
+    mainBtnText: { ...Typography.h2, color: Colors.onPrimary, fontWeight: '800', flexShrink: 1, textAlign: 'center' },
     finishBtn: {
         backgroundColor: Colors.success,
     },

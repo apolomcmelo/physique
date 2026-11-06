@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 
 const mockReplace = jest.fn();
@@ -8,6 +8,8 @@ const mockGetWorkout = jest.fn();
 const mockTimerComplete = jest.fn();
 const mockGetSessions = jest.fn<Promise<unknown[]>, []>(async () => []);
 const mockDeleteSession = jest.fn(async () => {});
+jest.mock('@expo/vector-icons', () => ({ MaterialIcons: () => null }));
+jest.mock('@expo/vector-icons/Ionicons', () => () => null);
 jest.mock('expo-router', () => ({
     router: { replace: (...args: unknown[]) => mockReplace(...args), back: jest.fn() },
     useLocalSearchParams: () => ({ id: 'workout-1' }),
@@ -29,24 +31,24 @@ beforeEach(() => { jest.clearAllMocks(); mockGetWorkout.mockResolvedValue(workou
 
 it('records the one-set workout before showing Finish and never starts final rest', async () => {
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
-    expect(screen.queryByText('Finalizar Treino 🏁')).toBeNull();
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
-    await waitFor(() => screen.getByText('Finalizar Treino 🏁'));
-    expect(screen.queryByText('PULAR DESCANSO')).toBeNull();
+    await waitFor(() => screen.getByText(/^Concluir Série/));
+    expect(screen.queryByText('Finalizar Treino')).toBeNull();
+    fireEvent.press(screen.getByText(/^Concluir Série/));
+    await waitFor(() => screen.getByText('Finalizar Treino'));
+    expect(screen.queryByText('Pular Descanso')).toBeNull();
     expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({ setNumber: 1 })] }));
-    fireEvent.press(screen.getByText('Finalizar Treino 🏁'));
+    fireEvent.press(screen.getByText('Finalizar Treino'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/workout'));
 });
 
 it('leaves the same set executable after a failed save', async () => {
     mockSaveSession.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('network'));
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    await waitFor(() => screen.getByText(/^Concluir Série/));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
     await waitFor(() => screen.getByText(/^Erro ao registrar série/));
-    expect(screen.queryByText('Finalizar Treino 🏁')).toBeNull();
-    expect(screen.getByText('✓ Terminei a Série')).toBeTruthy();
+    expect(screen.queryByText('Finalizar Treino')).toBeNull();
+    expect(screen.getByText(/^Concluir Série/)).toBeTruthy();
 });
 
 it('logs timed-set context when persistence fails', async () => {
@@ -58,10 +60,10 @@ it('logs timed-set context when persistence fails', async () => {
     }] });
     mockSaveSession.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('RPC failure'));
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('▶ Iniciar Série'));
-    fireEvent.press(screen.getByText('▶ Iniciar Série'));
+    await waitFor(() => screen.getByText('Iniciar Série'));
+    fireEvent.press(screen.getByText('Iniciar Série'));
     jest.setSystemTime(new Date('2026-09-25T10:00:45Z'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
 
     await waitFor(() => screen.getByText(/^Erro ao registrar série/));
     expect(logError).toHaveBeenCalledWith('[workout] set completion failed', expect.objectContaining({
@@ -80,10 +82,10 @@ it('logs timed-set context when persistence fails', async () => {
 
 it('records edited performed repetitions and load instead of the prescription', async () => {
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
+    await waitFor(() => screen.getByText(/^Concluir Série/));
     fireEvent.changeText(screen.getByDisplayValue('10'), '8');
     fireEvent.changeText(screen.getByDisplayValue('20'), '17,5');
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
     await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({
         repsCompleted: 8, weightUsedKg: 17.5, prescribedReps: 10, prescribedWeightKg: 20,
     })] })));
@@ -92,13 +94,13 @@ it('records edited performed repetitions and load instead of the prescription', 
 it('shows the prescribed 60-second rest between sets and lets the user skip it', async () => {
     mockGetWorkout.mockResolvedValue({ ...workout, exercises: [{ ...workout.exercises[0], sets: 2 }] });
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
+    await waitFor(() => screen.getByText(/^Concluir Série/));
     expect(screen.getByText('Descanso 60s')).toBeTruthy();
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
-    await waitFor(() => screen.getByText('PULAR DESCANSO'));
-    fireEvent.press(screen.getByText('PULAR DESCANSO'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
+    await waitFor(() => screen.getByText('Pular Descanso'));
+    fireEvent.press(screen.getByText('Pular Descanso'));
     await waitFor(() => screen.getByText('Série 2'));
-    expect(screen.queryByText('Finalizar Treino 🏁')).toBeNull();
+    expect(screen.queryByText('Finalizar Treino')).toBeNull();
 });
 
 it('allows a zero-second rest override without changing the workout prescription', async () => {
@@ -108,7 +110,7 @@ it('allows a zero-second rest override without changing the workout prescription
     fireEvent.press(screen.getByLabelText('Diminuir descanso em 15 segundos'));
     fireEvent.press(screen.getByLabelText('Diminuir descanso em 15 segundos'));
     expect(screen.getByText('Descanso 0s')).toBeTruthy();
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
     await waitFor(() => screen.getByText('Série 2'));
     expect(mockGetWorkout).toHaveBeenCalled();
 });
@@ -119,11 +121,11 @@ it('inherits the between-set rest for a transition and honours an explicit zero 
         { ...workout.exercises[0], id: 'exercise-2', name: 'Flexão', sets: 1 },
     ] });
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
+    await waitFor(() => screen.getByText(/^Concluir Série/));
     expect(screen.getByText('Descanso 0s')).toBeTruthy();
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
     await waitFor(() => screen.getByText('Flexão'));
-    expect(screen.queryByText('PULAR DESCANSO')).toBeNull();
+    expect(screen.queryByText('Pular Descanso')).toBeNull();
 });
 
 it('does not create a duplicate set when completion is pressed rapidly twice', async () => {
@@ -131,11 +133,11 @@ it('does not create a duplicate set when completion is pressed rapidly twice', a
     const waiting = new Promise<void>((resolve) => { releaseSave = resolve; });
     mockSaveSession.mockResolvedValueOnce(undefined).mockImplementationOnce(() => waiting);
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    await waitFor(() => screen.getByText(/^Concluir Série/));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
     releaseSave();
-    await waitFor(() => screen.getByText('Finalizar Treino 🏁'));
+    await waitFor(() => screen.getByText('Finalizar Treino'));
     expect(mockSaveSession).toHaveBeenCalledTimes(2);
 });
 
@@ -144,10 +146,10 @@ it('records one timed HIT set with elapsed performed time when ended early', asy
     jest.setSystemTime(new Date('2026-09-25T10:00:00Z'));
     mockGetWorkout.mockResolvedValue({ ...workout, type: 'HIT', exercises: [{ ...workout.exercises[0], sets: 1, repsPerSet: null, weightKg: null, durationSeconds: 1500 }] });
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('▶ Iniciar Série'));
-    fireEvent.press(screen.getByText('▶ Iniciar Série'));
+    await waitFor(() => screen.getByText('Iniciar Série'));
+    fireEvent.press(screen.getByText('Iniciar Série'));
     jest.setSystemTime(new Date('2026-09-25T10:23:30Z'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
     await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({
         durationSeconds: 1410, repsCompleted: 0, weightUsedKg: null,
     })] })));
@@ -159,11 +161,11 @@ async function recordTimedSet(exercise: object, weightInput?: string) {
     jest.setSystemTime(new Date('2026-09-25T10:00:00Z'));
     mockGetWorkout.mockResolvedValue({ ...workout, exercises: [{ ...workout.exercises[0], sets: 1, ...exercise }] });
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('▶ Iniciar Série'));
+    await waitFor(() => screen.getByText('Iniciar Série'));
     if (weightInput !== undefined) fireEvent.changeText(screen.getByLabelText('Carga realizada em kg'), weightInput);
-    fireEvent.press(screen.getByText('▶ Iniciar Série'));
+    fireEvent.press(screen.getByText('Iniciar Série'));
     jest.setSystemTime(new Date('2026-09-25T10:00:30Z'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
     return screen;
 }
 
@@ -205,17 +207,17 @@ it('records only the expired timed set and waits for a user action after elapsed
     jest.setSystemTime(new Date('2026-09-25T10:00:00Z'));
     mockGetWorkout.mockResolvedValue({ ...workout, type: 'HIT', exercises: [{ ...workout.exercises[0], sets: 2, repsPerSet: null, weightKg: null, durationSeconds: 45 }] });
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('▶ Iniciar Série'));
-    fireEvent.press(screen.getByText('▶ Iniciar Série'));
+    await waitFor(() => screen.getByText('Iniciar Série'));
+    fireEvent.press(screen.getByText('Iniciar Série'));
     jest.setSystemTime(new Date('2026-09-25T10:02:00Z'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
     await waitFor(() => screen.getByText('Continuar após descanso'));
     expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({ durationSeconds: 45, setNumber: 1 })] }));
     expect(mockSaveSession).toHaveBeenCalledTimes(2);
     expect(screen.queryByText('Série 2')).toBeNull();
     fireEvent.press(screen.getByText('Continuar após descanso'));
     await waitFor(() => screen.getByText('Série 2'));
-    expect(screen.getByText('▶ Iniciar Série')).toBeTruthy();
+    expect(screen.getByText('Iniciar Série')).toBeTruthy();
     jest.useRealTimers();
 });
 
@@ -224,11 +226,11 @@ it('records the expired timed set once and shows elapsed rest rather than auto-s
     jest.setSystemTime(new Date('2026-09-25T10:00:00Z'));
     mockGetWorkout.mockResolvedValue({ ...workout, type: 'HIT', exercises: [{ ...workout.exercises[0], sets: 2, repsPerSet: null, weightKg: null, durationSeconds: 45 }] });
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('▶ Iniciar Série'));
-    fireEvent.press(screen.getByText('▶ Iniciar Série'));
+    await waitFor(() => screen.getByText('Iniciar Série'));
+    fireEvent.press(screen.getByText('Iniciar Série'));
     jest.setSystemTime(new Date('2026-09-25T10:01:15Z'));
     await mockTimerComplete();
-    await waitFor(() => screen.getByText('DESCANSO'));
+    await waitFor(() => screen.getByText('Pular Descanso'));
     expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({ durationSeconds: 45 })] }));
     expect(screen.queryByText('Série 2')).toBeNull();
     jest.useRealTimers();
@@ -237,9 +239,9 @@ it('records the expired timed set once and shows elapsed rest rather than auto-s
 it('can save recorded work as partial without finishing the missing set', async () => {
     mockGetWorkout.mockResolvedValue({ ...workout, exercises: [{ ...workout.exercises[0], sets: 2 }] });
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
-    await waitFor(() => screen.getByText('PULAR DESCANSO'));
+    await waitFor(() => screen.getByText(/^Concluir Série/));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
+    await waitFor(() => screen.getByText('Pular Descanso'));
     fireEvent.press(screen.getByText('Salvar parcial'));
     await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ status: 'partial', sets: [expect.objectContaining({ setNumber: 1 })] })));
 });
@@ -250,7 +252,7 @@ it('offers the existing unfinished session to resume rather than starting anothe
     await waitFor(() => screen.getByText('Retomar treino'));
     expect(mockSaveSession).not.toHaveBeenCalled();
     fireEvent.press(screen.getByText('Retomar treino'));
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
+    await waitFor(() => screen.getByText(/^Concluir Série/));
 });
 
 it('resumes at the first unrecorded set instead of recording a duplicate', async () => {
@@ -262,7 +264,7 @@ it('resumes at the first unrecorded set instead of recording a duplicate', async
     await waitFor(() => screen.getByText('Retomar treino'));
     fireEvent.press(screen.getByText('Retomar treino'));
     await waitFor(() => screen.getByText('Série 2'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
     await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [
         expect.objectContaining({ setNumber: 1 }), expect.objectContaining({ setNumber: 2 }),
     ] })));
@@ -274,11 +276,11 @@ it('persists exactly two sets across two exercises without requiring final rest'
         { ...workout.exercises[0], id: 'exercise-2', name: 'Flexão', restSecondsBeforeNextExercise: 0 },
     ] });
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
+    await waitFor(() => screen.getByText(/^Concluir Série/));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
     await waitFor(() => screen.getByText('Flexão'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
-    await waitFor(() => screen.getByText('Finalizar Treino 🏁'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
+    await waitFor(() => screen.getByText('Finalizar Treino'));
     expect(mockSaveSession).toHaveBeenLastCalledWith(expect.objectContaining({ sets: [
         expect.objectContaining({ exerciseId: 'exercise-1', setNumber: 1 }),
         expect.objectContaining({ exerciseId: 'exercise-2', setNumber: 1 }),
@@ -292,17 +294,17 @@ it('finishes a resumed session whose final set was already recorded without reco
     const screen = render(<ActiveWorkoutScreen />);
     await waitFor(() => screen.getByText('Retomar treino'));
     fireEvent.press(screen.getByText('Retomar treino'));
-    await waitFor(() => screen.getByText('Finalizar Treino 🏁'));
-    expect(screen.queryByText('✓ Terminei a Série')).toBeNull();
-    fireEvent.press(screen.getByText('Finalizar Treino 🏁'));
+    await waitFor(() => screen.getByText('Finalizar Treino'));
+    expect(screen.queryByText(/^Concluir Série/)).toBeNull();
+    fireEvent.press(screen.getByText('Finalizar Treino'));
     await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({ id: 'set-1' })] })));
 });
 
 it('requires explicit confirmation to discard a session', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
-    fireEvent.press(screen.getByText('← Voltar'));
+    await waitFor(() => screen.getByText(/^Concluir Série/));
+    fireEvent.press(screen.getByLabelText('Voltar'));
     fireEvent.press(screen.getByText('Descartar'));
     expect(alert).toHaveBeenCalledWith('Descartar treino?', expect.any(String), expect.any(Array));
     expect(mockReplace).not.toHaveBeenCalled();
@@ -315,11 +317,11 @@ it('corrects the performed time of a recorded timed set without adding another s
     jest.setSystemTime(new Date('2026-09-25T10:00:00Z'));
     mockGetWorkout.mockResolvedValue({ ...workout, type: 'HIT', exercises: [{ ...workout.exercises[0], sets: 1, repsPerSet: null, weightKg: null, durationSeconds: 1200 }] });
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('▶ Iniciar Série'));
-    fireEvent.press(screen.getByText('▶ Iniciar Série'));
+    await waitFor(() => screen.getByText('Iniciar Série'));
+    fireEvent.press(screen.getByText('Iniciar Série'));
     jest.setSystemTime(new Date('2026-09-25T10:18:00Z'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
-    await waitFor(() => screen.getByText('Finalizar Treino 🏁'));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
+    await waitFor(() => screen.getByText('Finalizar Treino'));
     fireEvent.changeText(screen.getByDisplayValue('1080'), '1040');
     fireEvent.press(screen.getByText('Corrigir série'));
     await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({ sets: [expect.objectContaining({ durationSeconds: 1040 })] })));
@@ -330,7 +332,7 @@ it('does not finish a session with zero exercises', async () => {
     mockGetWorkout.mockResolvedValue({ ...workout, exercises: [] });
     const screen = render(<ActiveWorkoutScreen />);
     await waitFor(() => screen.getByText('Supino'));
-    expect(screen.queryByText('Finalizar Treino 🏁')).toBeNull();
+    expect(screen.queryByText('Finalizar Treino')).toBeNull();
 });
 
 it('does not navigate away when saving a partial workout fails', async () => {
@@ -347,14 +349,93 @@ it('does not navigate away when saving a partial workout fails', async () => {
 it('does not navigate away when finishing fails and can retry with the recorded final set', async () => {
     mockSaveSession.mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('network'));
     const screen = render(<ActiveWorkoutScreen />);
-    await waitFor(() => screen.getByText('✓ Terminei a Série'));
-    fireEvent.press(screen.getByText('✓ Terminei a Série'));
-    await waitFor(() => screen.getByText('Finalizar Treino 🏁'));
-    fireEvent.press(screen.getByText('Finalizar Treino 🏁'));
+    await waitFor(() => screen.getByText(/^Concluir Série/));
+    fireEvent.press(screen.getByText(/^Concluir Série/));
+    await waitFor(() => screen.getByText('Finalizar Treino'));
+    fireEvent.press(screen.getByText('Finalizar Treino'));
     await waitFor(() => screen.getByText('Erro ao finalizar treino'));
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(screen.getByText('Finalizar Treino 🏁')).toBeTruthy();
-    fireEvent.press(screen.getByText('Finalizar Treino 🏁'));
+    expect(screen.getByText('Finalizar Treino')).toBeTruthy();
+    fireEvent.press(screen.getByText('Finalizar Treino'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/workout'));
     expect(mockSaveSession).toHaveBeenLastCalledWith(expect.objectContaining({ sets: [expect.objectContaining({ setNumber: 1 })] }));
+});
+
+describe('cockpit layout', () => {
+    const twoExercises = { ...workout, name: 'Hipertrofia A', exercises: [
+        { ...workout.exercises[0], sets: 2 },
+        { ...workout.exercises[0], id: 'exercise-2', name: 'Flexão', sets: 1, weightKg: null, orderIndex: 1 },
+    ] };
+
+    it('shows session progress, the set target and the exercise queue states', async () => {
+        mockGetWorkout.mockResolvedValue(twoExercises);
+        const screen = render(<ActiveWorkoutScreen />);
+        await waitFor(() => screen.getByText('Treino em Andamento'));
+        expect(screen.getByText('Exercício 1 de 2')).toBeTruthy();
+        expect(screen.getByText('Progresso: 0%')).toBeTruthy();
+        expect(screen.getByText('Série 1 de 3')).toBeTruthy();
+        expect(screen.getByText('10 reps com 20 kg')).toBeTruthy();
+        expect(screen.getByText('Fila da Sessão')).toBeTruthy();
+        expect(screen.getByText('ATUAL')).toBeTruthy();
+        expect(screen.getByText('A seguir')).toBeTruthy();
+        expect(screen.getByText('Hipertrofia A')).toBeTruthy();
+    });
+
+    it('advances the progress after recording a set', async () => {
+        mockGetWorkout.mockResolvedValue(twoExercises);
+        const screen = render(<ActiveWorkoutScreen />);
+        await waitFor(() => screen.getByText(/^Concluir Série 1 de 2/));
+        fireEvent.press(screen.getByText(/^Concluir Série 1 de 2/));
+        await waitFor(() => screen.getByText('Progresso: 33%'));
+        expect(screen.getByText('Série 2 de 3')).toBeTruthy();
+    });
+
+    it('steps load and repetitions with the big buttons and records the stepped values', async () => {
+        const screen = render(<ActiveWorkoutScreen />);
+        await waitFor(() => screen.getByText(/^Concluir Série/));
+        fireEvent.press(screen.getByLabelText('Aumentar carga'));
+        fireEvent.press(screen.getByLabelText('Diminuir repetições'));
+        expect(screen.getByDisplayValue('21')).toBeTruthy();
+        expect(screen.getByDisplayValue('9')).toBeTruthy();
+        fireEvent.press(screen.getByText(/^Concluir Série/));
+        await waitFor(() => expect(mockSaveSession).toHaveBeenCalledWith(expect.objectContaining({
+            sets: [expect.objectContaining({ repsCompleted: 9, weightUsedKg: 21 })],
+        })));
+    });
+
+    it('never steps the load below zero', async () => {
+        mockGetWorkout.mockResolvedValue({ ...workout, exercises: [{ ...workout.exercises[0], weightKg: null }] });
+        const screen = render(<ActiveWorkoutScreen />);
+        await waitFor(() => screen.getByText(/^Concluir Série/));
+        fireEvent.press(screen.getByLabelText('Diminuir carga'));
+        expect(screen.queryByDisplayValue('-1')).toBeNull();
+    });
+
+    it('toggles the keep-screen-awake preference', async () => {
+        const screen = render(<ActiveWorkoutScreen />);
+        await waitFor(() => screen.getByText('Tela Ativa'));
+        fireEvent.press(screen.getByLabelText('Manter tela ativa'));
+        expect(screen.getByText('Tela Padrão')).toBeTruthy();
+    });
+
+    it('shows the elapsed session clock from the session start', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-09-25T10:00:00Z'));
+        const screen = render(<ActiveWorkoutScreen />);
+        await waitFor(() => screen.getAllByText('00:00'));
+        act(() => { jest.advanceTimersByTime(65_000); });
+        expect(screen.getByText('01:05')).toBeTruthy();
+        jest.useRealTimers();
+    });
+
+    it('keeps the partial save under the queue and reveals resume and discard from Voltar', async () => {
+        const screen = render(<ActiveWorkoutScreen />);
+        await waitFor(() => screen.getByText('Salvar parcial'));
+        expect(screen.queryByText('Descartar')).toBeNull();
+        fireEvent.press(screen.getByLabelText('Voltar'));
+        expect(screen.getByText('Retomar')).toBeTruthy();
+        expect(screen.getByText('Descartar')).toBeTruthy();
+        fireEvent.press(screen.getByText('Retomar'));
+        expect(screen.queryByText('Descartar')).toBeNull();
+    });
 });

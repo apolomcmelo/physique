@@ -209,8 +209,8 @@ test.describe('authenticated user flows', () => {
         await expect(page.getByText('Flexão', { exact: true }).last()).toBeVisible();
         await page.getByText('Iniciar Treino', { exact: true }).last().click();
         await expect(page.getByLabel('Repetições realizadas')).toHaveValue('8');
-        await page.getByText('✓ Terminei a Série', { exact: true }).click();
-        await page.getByText('Finalizar Treino 🏁', { exact: true }).click();
+        await page.getByText(/^Concluir Série/).click();
+        await page.getByText('Finalizar Treino', { exact: true }).click();
 
         await expect(page.getByText('Treino E2E', { exact: true }).last()).toBeVisible();
     });
@@ -228,14 +228,14 @@ test.describe('authenticated user flows', () => {
         await page.getByText('Treino cronometrado E2E', { exact: true }).last().click();
         await expect(page.getByText('1 série x 45s', { exact: true })).toBeVisible();
         await page.getByText('Iniciar Treino', { exact: true }).last().click();
-        await page.getByText('▶ Iniciar Série', { exact: true }).click();
+        await page.getByText('Iniciar Série', { exact: true }).click();
         await expect(page.getByText('00:45', { exact: true })).toBeVisible();
         await page.screenshot({ path: 'docs/e2e-wall-sit-timer.png', fullPage: true });
 
         await page.clock.runFor(44_000);
         await expect(page.getByText('00:01', { exact: true })).toBeVisible();
-        await page.getByText('✓ Terminei a Série', { exact: true }).click();
-        await expect(page.getByText('Finalizar Treino 🏁', { exact: true })).toBeVisible();
+        await page.getByText(/^Concluir Série/).click();
+        await expect(page.getByText('Finalizar Treino', { exact: true })).toBeVisible();
 
         const savedSets = await page.evaluate(() => {
             const key = Object.keys(localStorage).find((item) => item.startsWith('@physique/workout_sessions/'));
@@ -266,10 +266,10 @@ test.describe('authenticated user flows', () => {
         await page.getByText('Prancha com anilha E2E', { exact: true }).last().click();
         await page.getByText('Iniciar Treino', { exact: true }).last().click();
         await expect(page.getByLabel('Carga realizada em kg')).toHaveValue('3');
-        await page.getByText('▶ Iniciar Série', { exact: true }).click();
+        await page.getByText('Iniciar Série', { exact: true }).click();
         await page.clock.runFor(30_000);
-        await page.getByText('✓ Terminei a Série', { exact: true }).click();
-        await expect(page.getByText('Finalizar Treino 🏁', { exact: true })).toBeVisible();
+        await page.getByText(/^Concluir Série/).click();
+        await expect(page.getByText('Finalizar Treino', { exact: true })).toBeVisible();
         await expect(page.getByText(/^Erro ao registrar série/)).toHaveCount(0);
 
         const savedSets = await page.evaluate(() => {
@@ -329,25 +329,25 @@ test.describe('authenticated user flows', () => {
         await expect(page.getByText('Descanso: 30s', { exact: true })).toBeVisible();
         await expect(page.getByText('Transição: 45s', { exact: true })).toBeVisible();
         await page.getByText('Iniciar Treino', { exact: true }).last().click();
-        await page.getByText('✓ Terminei a Série', { exact: true }).click();
+        await page.getByText(/^Concluir Série/).click();
         await expect(page.getByText('Descanso 30s', { exact: true })).toBeVisible();
         await expect(page.getByText('1 séries registradas', { exact: true })).toBeVisible();
         await expect(page.getByText('00:30', { exact: true })).toBeVisible();
         await page.clock.runFor(5_000);
         await expect(page.getByText('00:25', { exact: true })).toBeVisible();
-        await page.getByText('PULAR DESCANSO', { exact: true }).click();
-        await expect(page.getByText('Série 2', { exact: true })).toBeVisible();
-        await page.getByText('✓ Terminei a Série', { exact: true }).click();
+        await page.getByText('Pular Descanso', { exact: true }).click();
+        await expect(page.getByText(/^Série 2 de/).first()).toBeVisible();
+        await page.getByText(/^Concluir Série/).click();
         await expect(page.getByText('Descanso 45s', { exact: true })).toBeVisible();
         await expect(page.getByText('2 séries registradas', { exact: true })).toBeVisible();
         await expect(page.getByText('00:45', { exact: true })).toBeVisible();
         await page.clock.runFor(10_000);
         await expect(page.getByText('00:35', { exact: true })).toBeVisible();
-        await page.getByText('PULAR DESCANSO', { exact: true }).click();
-        await expect(page.getByText('Avanço', { exact: true })).toBeVisible();
-        await page.getByText('✓ Terminei a Série', { exact: true }).click();
+        await page.getByText('Pular Descanso', { exact: true }).click();
+        await expect(page.getByText('Avanço', { exact: true }).first()).toBeVisible();
+        await page.getByText(/^Concluir Série/).click();
         await expect(page.getByText('3 séries registradas', { exact: true })).toBeVisible();
-        await expect(page.getByText('Finalizar Treino 🏁', { exact: true })).toBeVisible();
+        await expect(page.getByText('Finalizar Treino', { exact: true })).toBeVisible();
     });
 
     test('preserves explicitly configured zero-second rest between sets', async ({ page }) => {
@@ -361,8 +361,8 @@ test.describe('authenticated user flows', () => {
 
         await page.getByText('Treino sem descanso E2E', { exact: true }).last().click();
         await page.getByText('Iniciar Treino', { exact: true }).last().click();
-        await page.getByText('✓ Terminei a Série', { exact: true }).click();
-        await expect(page.getByText('Série 2', { exact: true })).toBeVisible();
+        await page.getByText(/^Concluir Série/).click();
+        await expect(page.getByText(/^Série 2 de/).first()).toBeVisible();
         await expect(page.getByText('Descanso 0s', { exact: true })).toBeVisible();
     });
 

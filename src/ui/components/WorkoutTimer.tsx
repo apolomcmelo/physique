@@ -8,6 +8,7 @@ interface WorkoutTimerProps {
     onComplete: () => void;
     autoStart?: boolean;
     deadline?: number;
+    children?: (state: { remaining: number; display: string; expired: boolean }) => React.ReactNode;
 }
 
 export const WorkoutTimer = ({
@@ -15,6 +16,7 @@ export const WorkoutTimer = ({
     onComplete,
     autoStart = false,
     deadline,
+    children,
 }: WorkoutTimerProps) => {
     const [remaining, setRemaining] = useState(durationSeconds);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -67,6 +69,8 @@ export const WorkoutTimer = ({
     const display = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
     const isExpired = remaining === 0;
+
+    if (children) return <>{children({ remaining, display, expired: isExpired })}</>;
 
     return (
         <View style={styles.container}>
