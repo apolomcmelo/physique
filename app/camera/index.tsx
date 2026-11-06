@@ -342,7 +342,7 @@ export default function CameraScreen() {
                             <Text
                                 style={[
                                     Typography.label,
-                                    { color: selectedAngle === a.key ? Colors.white : Colors.textSecondary },
+                                    { color: selectedAngle === a.key ? Colors.onPrimary : Colors.textSecondary },
                                 ]}
                             >
                                 {a.label}

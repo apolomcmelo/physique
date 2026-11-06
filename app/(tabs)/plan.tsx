@@ -450,7 +450,7 @@ export default function PlanScreen() {
                     >
                         <TypographyText
                             variant="label"
-                            color={dayFilter === option.key ? Colors.white : Colors.textSecondary}
+                            color={dayFilter === option.key ? Colors.onPrimary : Colors.textSecondary}
                         >
                             {option.label}
                         </TypographyText>

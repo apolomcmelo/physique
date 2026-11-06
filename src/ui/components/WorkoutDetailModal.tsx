@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     exerciseCard: { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.md, gap: Spacing.xs },
     exerciseTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     orderBadge: { width: 28, height: 28, borderRadius: Radius.full, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
-    orderText: { color: Colors.white, fontWeight: '700' },
+    orderText: { color: Colors.onPrimary, fontWeight: '700' },
     exerciseName: { flex: 1 },
     prescription: { marginLeft: 36 },
     tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginLeft: 36 },

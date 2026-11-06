@@ -536,13 +536,13 @@ export default function ActiveWorkoutScreen() {
 
                 {!resting && !isWorkoutComplete && !setTimerRunning && setDuration && (
                     <TouchableOpacity style={styles.mainBtn} onPress={() => { setStartedAtRef.current = Date.now(); setSetDeadline(Date.now() + setDuration * 1000); setSetTimerRunning(true); }}>
-                        <Text style={[Typography.h3, { color: Colors.white }]}>▶ Iniciar Série</Text>
+                        <Text style={[Typography.h3, { color: Colors.onPrimary }]}>▶ Iniciar Série</Text>
                     </TouchableOpacity>
                 )}
 
                 {!resting && !isWorkoutComplete && (setTimerRunning || !setDuration) && (
                     <TouchableOpacity style={styles.mainBtn} onPress={handleCompleteSet} disabled={setSaving}>
-                        <Text style={[Typography.h3, { color: Colors.white }]}>✓ Terminei a Série</Text>
+                        <Text style={[Typography.h3, { color: Colors.onPrimary }]}>✓ Terminei a Série</Text>
                     </TouchableOpacity>
                 )}
 

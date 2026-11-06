@@ -288,7 +288,7 @@ export const WorkoutFormModal = ({
                                     >
                                         <Typography
                                             variant="label"
-                                            color={type === t ? Colors.white : Colors.textSecondary}
+                                            color={type === t ? Colors.onPrimary : Colors.textSecondary}
                                         >
                                             {t === 'Calisthenics' ? 'Calistenia' : t === 'HIT' ? 'HIT' : 'Musculação'}
                                         </Typography>
@@ -320,7 +320,7 @@ export const WorkoutFormModal = ({
                                 {/* Exercise Header */}
                                 <View style={styles.exerciseHeader}>
                                     <View style={styles.exerciseNumberBadge}>
-                                        <Typography variant="label" color={Colors.white}>
+                                        <Typography variant="label" color={Colors.onPrimary}>
                                             #{index + 1}
                                         </Typography>
                                     </View>

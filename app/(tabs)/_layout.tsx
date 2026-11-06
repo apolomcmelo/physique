@@ -1,34 +1,33 @@
 import React from 'react';
+import { useWindowDimensions } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { APP_TABS } from '../../src/ui/navigation/tabConfig';
+import { MaterialIcons } from '@expo/vector-icons';
+import { APP_TABS, isWideLayout } from '../../src/ui/navigation/tabConfig';
+import { SideNav } from '../../src/ui/navigation/SideNav';
+import { Colors, FontFamily } from '../../src/ui/theme';
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+type TabBarRenderer = NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>;
 
-function TabIcon({
-    name,
-    color,
-    size,
-}: {
-    name: IoniconName;
-    color: string;
-    size: number;
-}) {
-    return <Ionicons name={name} size={size} color={color} />;
-}
+const renderSideNav: TabBarRenderer = (props) => <SideNav {...props} />;
 
 export default function TabsLayout() {
+    const { width } = useWindowDimensions();
+    const wide = isWideLayout(width);
+
     return (
         <Tabs
+            tabBar={wide ? renderSideNav : undefined}
             screenOptions={{
                 headerShown: false,
+                tabBarPosition: wide ? 'left' : 'bottom',
                 tabBarStyle: {
-                    backgroundColor: '#13131A',
-                    borderTopColor: '#2A2A3A',
+                    backgroundColor: Colors.surfaceLowest,
+                    borderTopColor: Colors.border,
                     borderTopWidth: 1,
                 },
-                tabBarActiveTintColor: '#6C63FF',
-                tabBarInactiveTintColor: '#505060',
+                tabBarLabelStyle: { fontFamily: FontFamily.medium },
+                tabBarActiveTintColor: Colors.primary,
+                tabBarInactiveTintColor: Colors.textDisabled,
             }}
         >
             {APP_TABS.map((tab) => (
@@ -38,7 +37,7 @@ export default function TabsLayout() {
                     options={{
                         title: tab.title,
                         tabBarIcon: ({ color, size }) => (
-                            <TabIcon name={tab.icon as IoniconName} color={color} size={size} />
+                            <MaterialIcons name={tab.icon} size={size} color={color} />
                         ),
                     }}
                 />

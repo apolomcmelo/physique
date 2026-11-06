@@ -29,7 +29,7 @@ export const EmptyState = ({ icon, title, message, action }: EmptyStateProps) =>
             </Text>
             {action && (
                 <TouchableOpacity style={styles.button} onPress={action.onPress} activeOpacity={0.75}>
-                    <Text style={[Typography.h4, { color: Colors.white }]}>{action.label}</Text>
+                    <Text style={[Typography.h4, { color: Colors.onPrimary }]}>{action.label}</Text>
                 </TouchableOpacity>
             )}
         </View>

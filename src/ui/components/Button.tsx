@@ -34,7 +34,12 @@ export const Button = ({
         style,
     ];
 
-    const textColor = variant === 'ghost' ? Colors.primary : Colors.white;
+    const textColor = {
+        primary: Colors.onPrimary,
+        secondary: Colors.textPrimary,
+        ghost: Colors.primary,
+        danger: Colors.onError,
+    }[variant];
 
     return (
         <TouchableOpacity

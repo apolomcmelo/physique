@@ -1,8 +1,10 @@
 import React, { useEffect } from 'react';
 import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import { SupabaseProvider } from '../src/ui/hooks/useSupabase';
 import { AuthProvider, useAuth } from '../src/ui/hooks/useAuth';
+import { Colors, FONT_ASSETS } from '../src/ui/theme';
 
 function AuthGate() {
     const segments = useSegments();
@@ -27,6 +29,10 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
+    const [fontsLoaded, fontError] = useFonts(FONT_ASSETS);
+
+    if (!fontsLoaded && !fontError) return null;
+
     return (
         <SupabaseProvider>
             <AuthProvider>
@@ -35,7 +41,7 @@ export default function RootLayout() {
                 <Stack
                     screenOptions={{
                         headerShown: false,
-                        contentStyle: { backgroundColor: '#0A0A0F' },
+                        contentStyle: { backgroundColor: Colors.background },
                     }}
                 >
                     <Stack.Screen name="login" />

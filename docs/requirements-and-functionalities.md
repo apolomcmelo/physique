@@ -21,7 +21,7 @@ Todos os grupos funcionais originais continuam no escopo. As decisões abaixo su
 
 ## 2. Perfil, medições e objetivos — MED
 
-- Perfil: nome, data de nascimento/idade calculada, altura, fuso, objetivo e meta de peso.
+- Perfil: nome, data de nascimento/idade calculada, altura, objetivo e meta de peso.
 - Peso, percentual de gordura e percentual de proteínas têm histórico com data/hora; permitir várias leituras do mesmo indicador no mesmo dia.
 - O valor atual de cada indicador é sua leitura mais recente, mostrando sua data. Uma leitura nova apenas de peso não cria nem sobrescreve percentuais.
 - Corrigir uma leitura específica afeta somente aquele registro/indicador, não outras datas. Permitir registros retroativos e exclusão confirmada.

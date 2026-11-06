@@ -689,7 +689,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primary,
     },
     cameraCaptureBtnText: {
-        color: Colors.white,
+        color: Colors.onPrimary,
         fontSize: 14,
         fontWeight: '700',
     },
