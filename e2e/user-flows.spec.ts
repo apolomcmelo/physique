@@ -206,8 +206,8 @@ test.describe('authenticated user flows', () => {
 
         await expect(page.getByText('Treino E2E', { exact: true }).last()).toBeVisible();
         await page.getByText('Treino E2E', { exact: true }).last().click();
-        await expect(page.getByText('Flexão', { exact: true })).toBeVisible();
-        await page.getByText('Iniciar Treino', { exact: true }).click();
+        await expect(page.getByText('Flexão', { exact: true }).last()).toBeVisible();
+        await page.getByText('Iniciar Treino', { exact: true }).last().click();
         await expect(page.getByLabel('Repetições realizadas')).toHaveValue('8');
         await page.getByText('✓ Terminei a Série', { exact: true }).click();
         await page.getByText('Finalizar Treino 🏁', { exact: true }).click();
@@ -227,7 +227,7 @@ test.describe('authenticated user flows', () => {
 
         await page.getByText('Treino cronometrado E2E', { exact: true }).last().click();
         await expect(page.getByText('1 série x 45s', { exact: true })).toBeVisible();
-        await page.getByText('Iniciar Treino', { exact: true }).click();
+        await page.getByText('Iniciar Treino', { exact: true }).last().click();
         await page.getByText('▶ Iniciar Série', { exact: true }).click();
         await expect(page.getByText('00:45', { exact: true })).toBeVisible();
         await page.screenshot({ path: 'docs/e2e-wall-sit-timer.png', fullPage: true });
@@ -264,7 +264,7 @@ test.describe('authenticated user flows', () => {
         await page.getByText('Criar Treino', { exact: true }).click();
 
         await page.getByText('Prancha com anilha E2E', { exact: true }).last().click();
-        await page.getByText('Iniciar Treino', { exact: true }).click();
+        await page.getByText('Iniciar Treino', { exact: true }).last().click();
         await expect(page.getByLabel('Carga realizada em kg')).toHaveValue('3');
         await page.getByText('▶ Iniciar Série', { exact: true }).click();
         await page.clock.runFor(30_000);
@@ -298,7 +298,7 @@ test.describe('authenticated user flows', () => {
         await page.getByText('Treino de descansos E2E', { exact: true }).last().click();
         await expect(page.getByText('Descanso: 30s', { exact: true })).toBeVisible();
         await expect(page.getByText('Transição: 45s', { exact: true })).toBeVisible();
-        await page.getByText('Iniciar Treino', { exact: true }).click();
+        await page.getByText('Iniciar Treino', { exact: true }).last().click();
         await page.getByText('✓ Terminei a Série', { exact: true }).click();
         await expect(page.getByText('Descanso 30s', { exact: true })).toBeVisible();
         await expect(page.getByText('1 séries registradas', { exact: true })).toBeVisible();
@@ -330,7 +330,7 @@ test.describe('authenticated user flows', () => {
         await page.getByText('Criar Treino', { exact: true }).click();
 
         await page.getByText('Treino sem descanso E2E', { exact: true }).last().click();
-        await page.getByText('Iniciar Treino', { exact: true }).click();
+        await page.getByText('Iniciar Treino', { exact: true }).last().click();
         await page.getByText('✓ Terminei a Série', { exact: true }).click();
         await expect(page.getByText('Série 2', { exact: true })).toBeVisible();
         await expect(page.getByText('Descanso 0s', { exact: true })).toBeVisible();
