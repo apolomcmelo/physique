@@ -4,32 +4,22 @@ import {
     View,
     ScrollView,
     StyleSheet,
-    TouchableOpacity,
-    ActivityIndicator,
-    Platform,
-    FlatList,
+    TextInput,
+    Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Exercise, Workout, WorkoutType } from '../../domain/entities/Workout';
 import { parseLocalizedDecimal } from '../../domain/value-objects/LocalizedDecimal';
 import { Button } from './Button';
-import { Input } from './Input';
-import { Card } from './Card';
 import { Typography } from './Typography';
 import { IconButton } from './IconButton';
+import { ExerciseFormCard, ExerciseFormData } from './workout/ExerciseFormCard';
+import { FilterChip } from './workout/FilterChip';
+import { WORKOUT_TYPE_ACCENT } from './workout/WorkoutCard';
+import { WORKOUT_TYPE_LABEL } from '../utils/workoutTypeLabel';
 import { Colors, Radius, Spacing, Typography as TypographyTheme } from '../theme';
 
-interface ExerciseFormData {
-    id: string;
-    name: string;
-    sets: string;
-    repsPerSet: string;
-    durationSeconds: string;
-    weightKg: string;
-    restSecondsBetweenSets: string;
-    restSecondsBeforeNextExercise: string;
-    notes: string;
-}
+const WORKOUT_TYPES: WorkoutType[] = ['Weightlifting', 'Calisthenics', 'HIT'];
 
 interface WorkoutFormModalProps {
     visible: boolean;
@@ -135,6 +125,24 @@ export const WorkoutFormModal = ({
         );
     }
 
+    function duplicateExercise(index: number) {
+        setExercises((prev) => {
+            const copy = { ...prev[index], id: `temp-${Date.now()}-${Math.random()}` };
+            return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)];
+        });
+    }
+
+    function adjustSets(index: number, delta: number) {
+        setExercises((prev) =>
+            prev.map((ex, i) => {
+                if (i !== index) return ex;
+                const current = parseInt(ex.sets, 10);
+                const next = Number.isNaN(current) ? Math.max(delta, 1) : Math.max(current + delta, 1);
+                return { ...ex, sets: String(next) };
+            }),
+        );
+    }
+
     function moveExerciseUp(index: number) {
         if (index <= 0) return;
         const newExercises = [...exercises];
@@ -214,6 +222,10 @@ export const WorkoutFormModal = ({
         onClose();
     }
 
+    const exerciseCount = exercises.filter((ex) => ex.name.trim()).length;
+    const title = isEditing ? `Editar Treino: ${workout?.name}` : 'Novo Treino';
+    const saveLabel = isEditing ? 'Salvar Alterações' : 'Criar Treino';
+
     return (
         <Modal
             visible={visible}
@@ -222,26 +234,29 @@ export const WorkoutFormModal = ({
             onRequestClose={handleClose}
         >
             <SafeAreaView style={styles.safeArea} edges={['top']}>
-                {/* Header */}
                 <View style={styles.header}>
-                    <View style={styles.headerTitleContainer}>
-                        <Typography
-                            variant="h2"
-                            color={Colors.textPrimary}
-                        >
-                            {isEditing ? 'Editar Treino' : 'Novo Treino'}
-                        </Typography>
-                    </View>
                     <IconButton
-                        icon="close-outline"
+                        icon="arrow-back"
                         onPress={handleClose}
-                        size="large"
+                        size="medium"
                         color={Colors.textSecondary}
-                        accessibilityLabel="Fechar"
+                        style={styles.backButton}
+                        accessibilityLabel="Voltar"
                     />
+                    <View style={styles.headerTitleContainer}>
+                        <Typography variant="h3" color={Colors.textPrimary}>
+                            {title}
+                        </Typography>
+                        {isEditing && (
+                            <View style={styles.modeBadge}>
+                                <Typography variant="labelMono" color={Colors.primary}>
+                                    Modo Edição
+                                </Typography>
+                            </View>
+                        )}
+                    </View>
                 </View>
 
-                {/* Error Message */}
                 {error && (
                     <View style={styles.errorContainer}>
                         <Typography variant="body" color={Colors.error}>
@@ -250,215 +265,89 @@ export const WorkoutFormModal = ({
                     </View>
                 )}
 
-                {/* Main Form */}
                 <ScrollView
                     ref={scrollViewRef}
                     style={styles.scrollView}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={true}
                 >
-                    {/* General Info Section */}
-                    <View style={styles.section}>
-                        <Typography variant="label" color={Colors.textSecondary} style={styles.sectionTitle}>
-                            Informações Gerais
-                        </Typography>
+                    <View style={styles.contentColumn}>
+                        <View style={styles.infoPanel}>
+                            <Typography variant="label" color={Colors.textSecondary} style={styles.fieldLabel}>
+                                Nome do Treino
+                            </Typography>
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="Ex: Treino de Peito"
+                                placeholderTextColor={Colors.textDisabled}
+                                value={name}
+                                onChangeText={setName}
+                                accessibilityLabel="Nome do Treino"
+                            />
 
-                        <Input
-                            label="Nome do Treino"
-                            placeholder="Ex: Treino de Peito"
-                            value={name}
-                            onChangeText={setName}
-                            style={styles.input}
-                        />
-
-                        {/* Type Selector Buttons */}
-                        <View style={styles.typeContainer}>
-                            <Typography variant="label" color={Colors.textSecondary}>
+                            <Typography variant="label" color={Colors.textSecondary} style={styles.fieldLabel}>
                                 Tipo
                             </Typography>
                             <View style={styles.typeButtons}>
-                                {(['Calisthenics', 'HIT', 'Weightlifting'] as WorkoutType[]).map((t) => (
-                                    <TouchableOpacity
+                                {WORKOUT_TYPES.map((t) => (
+                                    <FilterChip
                                         key={t}
-                                        style={[
-                                            styles.typeButton,
-                                            type === t && styles.typeButtonActive,
-                                        ]}
+                                        label={WORKOUT_TYPE_LABEL[t]}
+                                        active={type === t}
                                         onPress={() => setType(t)}
-                                    >
-                                        <Typography
-                                            variant="label"
-                                            color={type === t ? Colors.onPrimary : Colors.textSecondary}
-                                        >
-                                            {t === 'Calisthenics' ? 'Calistenia' : t === 'HIT' ? 'HIT' : 'Musculação'}
-                                        </Typography>
-                                    </TouchableOpacity>
+                                        dotColor={WORKOUT_TYPE_ACCENT[t]}
+                                        testID={`form-type-${t}`}
+                                    />
                                 ))}
+                            </View>
+
+                            <Typography variant="label" color={Colors.textSecondary} style={styles.fieldLabel}>
+                                Data e Hora (opcional)
+                            </Typography>
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="YYYY-MM-DDTHH:mm"
+                                placeholderTextColor={Colors.textDisabled}
+                                value={scheduledAt}
+                                onChangeText={setScheduledAt}
+                                accessibilityLabel="Data e Hora (opcional)"
+                            />
+                        </View>
+
+                        <View style={styles.listHeader}>
+                            <Typography variant="h3" color={Colors.textPrimary}>
+                                Ordem e Parâmetros de Execução
+                            </Typography>
+                            <View style={styles.countPill}>
+                                <Typography variant="labelMono" color={Colors.textSecondary} style={styles.countText}>
+                                    {`${exerciseCount} ${exerciseCount === 1 ? 'Exercício' : 'Exercícios'}`}
+                                </Typography>
                             </View>
                         </View>
 
-                        <Input
-                            label="Data e Hora (opcional)"
-                            placeholder="YYYY-MM-DDTHH:mm"
-                            value={scheduledAt}
-                            onChangeText={setScheduledAt}
-                            style={styles.input}
-                        />
-                    </View>
-
-                    {/* Exercises Section */}
-                    <View style={styles.section}>
-                        <Typography variant="label" color={Colors.textSecondary} style={styles.sectionTitle}>
-                            Exercícios ({exercises.filter((ex) => ex.name.trim()).length})
-                        </Typography>
-
                         {exercises.map((exercise, index) => (
-                            <Card
+                            <ExerciseFormCard
                                 key={exercise.id}
-                                style={styles.exerciseCard}
-                            >
-                                {/* Exercise Header */}
-                                <View style={styles.exerciseHeader}>
-                                    <View style={styles.exerciseNumberBadge}>
-                                        <Typography variant="label" color={Colors.onPrimary}>
-                                            #{index + 1}
-                                        </Typography>
-                                    </View>
-                                    <View style={styles.exerciseHeaderActions}>
-                                        <IconButton
-                                            icon="chevron-up"
-                                            onPress={() => moveExerciseUp(index)}
-                                            disabled={index === 0}
-                                            size="small"
-                                            color={Colors.primary}
-                                            accessibilityLabel={`Mover exercício ${index + 1} para cima`}
-                                        />
-                                        <IconButton
-                                            icon="chevron-down"
-                                            onPress={() => moveExerciseDown(index)}
-                                            disabled={index === exercises.length - 1}
-                                            size="small"
-                                            color={Colors.primary}
-                                            accessibilityLabel={`Mover exercício ${index + 1} para baixo`}
-                                        />
-                                        <IconButton
-                                            icon="trash-outline"
-                                            onPress={() => removeExerciseRow(index)}
-                                            size="small"
-                                            color={Colors.error}
-                                            accessibilityLabel={`Remover exercício ${index + 1}`}
-                                        />
-                                    </View>
-                                </View>
-
-                                {/* Exercise Name */}
-                                <Input
-                                    label="Nome do Exercício"
-                                    placeholder="Ex: Flexões"
-                                    value={exercise.name}
-                                    onChangeText={(value) => updateExercise(index, 'name', value)}
-                                    style={styles.input}
-                                />
-
-                                {/* Sets & Reps Row */}
-                                <View style={styles.rowContainer}>
-                                    <View style={styles.halfInput}>
-                                        <Input
-                                            label="Séries"
-                                            placeholder="Ex: 4"
-                                            value={exercise.sets}
-                                            onChangeText={(value) => updateExercise(index, 'sets', value)}
-                                            keyboardType="number-pad"
-                                        />
-                                    </View>
-                                    <View style={styles.halfInput}>
-                                        <Input
-                                            label="Reps"
-                                            placeholder="Ex: 10"
-                                            value={exercise.repsPerSet}
-                                            onChangeText={(value) => updateExercise(index, 'repsPerSet', value)}
-                                            keyboardType="number-pad"
-                                        />
-                                    </View>
-                                </View>
-
-                                {/* Duration & Weight Row */}
-                                <View style={styles.rowContainer}>
-                                    <View style={styles.halfInput}>
-                                        <Input
-                                            label="Duração (s)"
-                                            placeholder="Ex: 45"
-                                            value={exercise.durationSeconds}
-                                            onChangeText={(value) => updateExercise(index, 'durationSeconds', value)}
-                                            keyboardType="number-pad"
-                                        />
-                                    </View>
-                                    <View style={styles.halfInput}>
-                                        <Input
-                                            label="Peso (kg)"
-                                            placeholder="Ex: 4.5"
-                                            value={exercise.weightKg}
-                                            onChangeText={(value) => updateExercise(index, 'weightKg', value)}
-                                            keyboardType="decimal-pad"
-                                        />
-                                    </View>
-                                </View>
-
-                                {/* Rest Between Sets & Rest Before Next Exercise Row */}
-                                <View style={styles.rowContainer}>
-                                    <View style={styles.halfInput}>
-                                        <Input
-                                            label="Descanso entre séries (s)"
-                                            placeholder="Ex: 15"
-                                            value={exercise.restSecondsBetweenSets}
-                                            onChangeText={(value) => updateExercise(index, 'restSecondsBetweenSets', value)}
-                                            keyboardType="number-pad"
-                                        />
-                                    </View>
-                                    <View style={styles.halfInput}>
-                                        <Input
-                                            label="Descanso antes do próximo (s)"
-                                            placeholder="Ex: 30"
-                                            value={exercise.restSecondsBeforeNextExercise}
-                                            onChangeText={(value) => updateExercise(index, 'restSecondsBeforeNextExercise', value)}
-                                            keyboardType="number-pad"
-                                        />
-                                    </View>
-                                </View>
-
-                                {/* Notes */}
-                                <Input
-                                    label="Observações"
-                                    placeholder="Ex: Variação, dicas, etc."
-                                    value={exercise.notes}
-                                    onChangeText={(value) => updateExercise(index, 'notes', value)}
-                                    multiline
-                                    style={styles.input}
-                                />
-                            </Card>
+                                index={index}
+                                total={exercises.length}
+                                exercise={exercise}
+                                onChange={(field, value) => updateExercise(index, field, value)}
+                                onAdjustSets={(delta) => adjustSets(index, delta)}
+                                onMoveUp={() => moveExerciseUp(index)}
+                                onMoveDown={() => moveExerciseDown(index)}
+                                onDuplicate={() => duplicateExercise(index)}
+                                onRemove={() => removeExerciseRow(index)}
+                            />
                         ))}
 
-                        {/* Add Exercise Button */}
-                        <TouchableOpacity
-                            style={styles.addExerciseButton}
-                            onPress={addExerciseRow}
-                            activeOpacity={0.75}
-                        >
-                            <IconButton
-                                icon="add-outline"
-                                onPress={() => { }}
-                                size="medium"
-                                color={Colors.primary}
-                                style={styles.addExerciseIcon}
-                            />
-                            <Typography variant="body" color={Colors.primary}>
-                                Adicionar Exercício
+                        <Pressable style={styles.addExerciseButton} onPress={addExerciseRow} accessibilityRole="button">
+                            <Typography variant="body" color={Colors.primary} style={styles.addExerciseText}>
+                                + Adicionar Novo Exercício
                             </Typography>
-                        </TouchableOpacity>
+                        </Pressable>
                     </View>
                 </ScrollView>
 
-                {/* Footer Actions */}
                 <View style={styles.footer}>
                     <Button
                         label="Cancelar"
@@ -467,7 +356,7 @@ export const WorkoutFormModal = ({
                         style={styles.footerButton}
                     />
                     <Button
-                        label={isEditing ? 'Atualizar' : 'Criar Treino'}
+                        label={saveLabel}
                         onPress={handleSave}
                         loading={loading}
                         disabled={loading}
@@ -486,15 +375,33 @@ const styles = StyleSheet.create({
     },
     header: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        gap: Spacing.sm + 4,
         paddingHorizontal: Spacing.md,
         paddingVertical: Spacing.md,
         borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
+        borderBottomColor: Colors.borderSubtle,
+    },
+    backButton: {
+        backgroundColor: Colors.surfaceContainer,
+        borderWidth: 1,
+        borderColor: Colors.borderSubtle,
+        borderRadius: Radius.md,
     },
     headerTitleContainer: {
         flex: 1,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: Spacing.sm,
+    },
+    modeBadge: {
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 2,
+        borderRadius: Radius.sm,
+        backgroundColor: 'rgba(0, 230, 118, 0.15)',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 230, 118, 0.3)',
     },
     scrollView: {
         flex: 1,
@@ -504,6 +411,11 @@ const styles = StyleSheet.create({
         paddingVertical: Spacing.md,
         paddingBottom: Spacing.xl,
     },
+    contentColumn: {
+        width: '100%',
+        maxWidth: 1152,
+        alignSelf: 'center',
+    },
     errorContainer: {
         paddingHorizontal: Spacing.md,
         paddingVertical: Spacing.sm,
@@ -511,85 +423,67 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: Colors.error,
     },
-    section: {
+    infoPanel: {
+        backgroundColor: Colors.surfaceLowest,
+        borderRadius: Radius.lg,
+        borderWidth: 1,
+        borderColor: Colors.borderSubtle,
+        padding: Spacing.md,
+        gap: Spacing.sm,
         marginBottom: Spacing.lg,
     },
-    sectionTitle: {
-        marginBottom: Spacing.md,
-        fontSize: 12,
-        fontWeight: '600',
+    fieldLabel: {
+        textTransform: 'none',
+        letterSpacing: 0,
     },
-    input: {
-        marginBottom: Spacing.md,
-    },
-    typeContainer: {
-        marginBottom: Spacing.md,
-    },
-    typeButtons: {
-        flexDirection: 'row',
-        gap: Spacing.sm,
-        marginTop: Spacing.sm,
-    },
-    typeButton: {
-        flex: 1,
-        paddingVertical: Spacing.sm,
+    textInput: {
+        height: 44,
         paddingHorizontal: Spacing.md,
         borderRadius: Radius.md,
         borderWidth: 1,
-        borderColor: Colors.border,
-        backgroundColor: Colors.surface,
-        alignItems: 'center',
+        borderColor: Colors.borderSubtle,
+        backgroundColor: Colors.surfaceContainer,
+        color: Colors.textPrimary,
+        fontSize: 14,
+        marginBottom: Spacing.xs,
     },
-    typeButtonActive: {
-        backgroundColor: Colors.primary,
-        borderColor: Colors.primary,
-    },
-    exerciseCard: {
-        marginBottom: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    exerciseHeader: {
+    typeButtons: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: Spacing.md,
-        paddingBottom: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-    },
-    exerciseNumberBadge: {
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: Spacing.xs,
-        borderRadius: Radius.sm,
-    },
-    exerciseHeaderActions: {
-        flexDirection: 'row',
-        gap: Spacing.xs,
-    },
-    rowContainer: {
-        flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: Spacing.sm,
-        marginBottom: Spacing.md,
+        marginBottom: Spacing.xs,
     },
-    halfInput: {
-        flex: 1,
+    listHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm + 4,
+        paddingBottom: Spacing.sm + 4,
+        marginBottom: Spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.borderSubtle,
+    },
+    countPill: {
+        paddingHorizontal: Spacing.sm + 4,
+        paddingVertical: 2,
+        borderRadius: Radius.full,
+        backgroundColor: Colors.surfaceElevated,
+    },
+    countText: {
+        textTransform: 'none',
     },
     addExerciseButton: {
-        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: Spacing.md,
-        gap: Spacing.sm,
-        borderRadius: Radius.md,
-        borderWidth: 1,
-        borderColor: Colors.primary,
-        backgroundColor: Colors.transparent,
+        borderRadius: Radius.lg,
+        borderWidth: 2,
+        borderStyle: 'dashed',
+        borderColor: Colors.borderSubtle,
+        backgroundColor: 'rgba(9, 14, 23, 0.5)',
     },
-    addExerciseIcon: {
-        width: 24,
-        height: 24,
+    addExerciseText: {
+        fontFamily: TypographyTheme.h3.fontFamily,
+        fontWeight: '600',
     },
     footer: {
         flexDirection: 'row',
@@ -597,7 +491,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.md,
         paddingVertical: Spacing.md,
         borderTopWidth: 1,
-        borderTopColor: Colors.border,
+        borderTopColor: Colors.borderSubtle,
     },
     footerButton: {
         flex: 1,

@@ -281,6 +281,36 @@ test.describe('authenticated user flows', () => {
         await page.screenshot({ path: 'docs/e2e-timed-with-load.png', fullPage: true });
     });
 
+    test('edits a workout with the restyled form', async ({ page }) => {
+        await page.goto('/workout', { waitUntil: 'domcontentloaded' });
+        await page.getByLabel('Novo treino').click();
+        await expect(page.getByText('Novo Treino', { exact: true })).toBeVisible();
+        await page.getByPlaceholder('Ex: Treino de Peito').fill('Hipertrofia E2E');
+        await page.getByPlaceholder('Ex: Flexões').fill('Supino');
+        await page.getByPlaceholder('Ex: 4', { exact: true }).fill('3');
+        await page.getByPlaceholder('Ex: 10', { exact: true }).fill('8');
+        await page.getByText('Criar Treino', { exact: true }).click();
+
+        await page.getByLabel('Editar Hipertrofia E2E').click();
+        await expect(page.getByText('Editar Treino: Hipertrofia E2E', { exact: true })).toBeVisible();
+        await expect(page.getByText('Modo Edição', { exact: true })).toBeVisible();
+        await expect(page.getByText('1 Exercício', { exact: true })).toBeVisible();
+
+        await page.getByLabel('Aumentar séries do exercício 1').click();
+        await expect(page.getByPlaceholder('Ex: 4', { exact: true })).toHaveValue('4');
+        await page.getByLabel('Duplicar exercício 1').click();
+        await expect(page.getByPlaceholder('Ex: Flexões')).toHaveCount(2);
+        await page.screenshot({ path: 'docs/e2e-editar-treino.png', fullPage: true });
+
+        await page.getByLabel('Remover exercício 2').click();
+        await expect(page.getByPlaceholder('Ex: Flexões')).toHaveCount(1);
+        await page.getByText('Salvar Alterações', { exact: true }).click();
+
+        await page.getByLabel('Editar Hipertrofia E2E').click();
+        await expect(page.getByPlaceholder('Ex: 4', { exact: true })).toHaveValue('4');
+        await expect(page.getByPlaceholder('Ex: Flexões')).toHaveCount(1);
+    });
+
     test('uses configured between-set and next-exercise rest durations', async ({ page }) => {
         await page.clock.install({ time: new Date('2026-09-25T10:00:00Z') });
         await page.goto('/workout', { waitUntil: 'domcontentloaded' });
@@ -290,7 +320,7 @@ test.describe('authenticated user flows', () => {
         await page.getByPlaceholder('Ex: 4', { exact: true }).fill('2');
         await page.getByPlaceholder('Ex: 15', { exact: true }).fill('30');
         await page.getByPlaceholder('Ex: 30', { exact: true }).fill('45');
-        await page.getByText('Adicionar Exercício', { exact: true }).click();
+        await page.getByText('+ Adicionar Novo Exercício', { exact: true }).click();
         await page.getByPlaceholder('Ex: Flexões').last().fill('Avanço');
         await page.getByPlaceholder('Ex: 4', { exact: true }).last().fill('1');
         await page.getByText('Criar Treino', { exact: true }).click();

@@ -17,7 +17,9 @@ type IconName =
     | 'chevron-up'
     | 'chevron-down'
     | 'reorder-three'
-    | 'close-outline';
+    | 'close-outline'
+    | 'copy-outline'
+    | 'arrow-back';
 
 type IconSize = 'small' | 'medium' | 'large';
 
