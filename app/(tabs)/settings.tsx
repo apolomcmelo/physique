@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Exam, ExamFileType, createExam } from '../../src/domain/entities/Exam';
-import { getDeviceTimezone, isValidTimezone, User, calculateAge } from '../../src/domain/entities/User';
+import { User, calculateAge } from '../../src/domain/entities/User';
 import { WeightRecord } from '../../src/domain/entities/WeightRecord';
 import { createWeightGoal, selectWeightGoal, WeightGoal } from '../../src/domain/entities/WeightGoal';
 import { recordWeight } from '../../src/domain/use-cases/weight/RecordWeight';
@@ -62,7 +62,6 @@ export default function SettingsScreen() {
     const [protein, setProtein] = useState('');
     const [objective, setObjective] = useState('');
     const [goalStartedAt, setGoalStartedAt] = useState(formatDateOfBirthDisplay(new Date()));
-    const [timezone, setTimezone] = useState(getDeviceTimezone());
 
     // Prompt modal
     const [promptVisible, setPromptVisible] = useState(false);
@@ -91,7 +90,6 @@ export default function SettingsScreen() {
         setBodyFat(latestBodyFat != null ? String(latestBodyFat) : '');
         setProtein(latestProtein != null ? String(latestProtein) : '');
         setObjective(u.objective);
-        setTimezone(u.timezone ?? getDeviceTimezone());
     }
 
     async function loadData() {
@@ -120,7 +118,6 @@ export default function SettingsScreen() {
                 if (googleName) {
                     setName(googleName);
                 }
-                setTimezone(getDeviceTimezone());
                 setGoalStartedAt(formatDateOfBirthDisplay(new Date()));
                 setEditMode(true);
             }
@@ -161,10 +158,6 @@ export default function SettingsScreen() {
             setError('Percentuais devem estar entre 0 e 100');
             return;
         }
-        if (!isValidTimezone(timezone.trim())) {
-            setError('Informe um fuso IANA válido, por exemplo America/Sao_Paulo.');
-            return;
-        }
         const parsedGoalStart = parseWeightDateTimeInput(goalStartedAt, '00:00');
         if (!parsedGoalStart) {
             setError('Data de início da meta inválida (use DD/MM/AAAA).');
@@ -198,7 +191,6 @@ export default function SettingsScreen() {
                 bodyFatPercentage: parsedBodyFat ?? user?.bodyFatPercentage ?? null,
                 proteinPercentage: parsedProtein ?? user?.proteinPercentage ?? null,
                 objective: objective.trim(),
-                timezone: timezone.trim(),
             });
             const ownerId = await userRepo.getCurrentUserId();
             if (!ownerId) throw new Error('É necessário estar logado para salvar medições ou metas.');
@@ -253,7 +245,6 @@ export default function SettingsScreen() {
                 setWeightGoals((current) => [...current, nextGoal]);
             }
             setUser(updated);
-            setTimezone(updated.timezone ?? timezone.trim());
             setEditMode(false);
         } catch (cause) {
             console.error('[profile] measurement or goal save failed', { error: cause });
@@ -452,7 +443,6 @@ export default function SettingsScreen() {
                                 ? `${currentGoal.targetWeightKg.toLocaleString('pt-BR')} kg`
                                 : 'Sem meta'} />
                             {currentGoal && <InfoRow label="Início da meta" value={formatDateOfBirthDisplay(currentGoal.startedAt)} />}
-                            {user.timezone && <InfoRow label="Fuso horário" value={user.timezone} />}
                             {weightRecords.some((record) => record.bodyFatPercentage !== null) && (
                                 <InfoRow label="Gordura" value={`${weightRecords
                                     .filter((record) => record.bodyFatPercentage !== null)
@@ -545,11 +535,6 @@ export default function SettingsScreen() {
                             onChangeText={setObjective}
                             multiline
                         />
-                        <Input label="Fuso horário (IANA)" placeholder="America/Sao_Paulo" value={timezone}
-                            onChangeText={setTimezone} autoCapitalize="none" />
-                        <TypographyText variant="bodySmall" color={Colors.textSecondary} style={styles.inputHint}>
-                            O fuso é salvo no perfil. O uso nos cálculos da agenda depende das regras de horário de verão ainda em definição.
-                        </TypographyText>
                         <View style={[styles.row, { marginTop: Spacing.sm }]}>
                             {editMode && user && (
                                 <Button

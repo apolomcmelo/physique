@@ -63,7 +63,7 @@ Vercel is configured to run `npm run build` and serve `dist/`. Configure environ
 
 ## Reviewed behaviour to complete
 
-- Recurring weekly meal/workout routines, with one active and one pending version. The first CSV data row anchors the next start in the profile timezone; no fixed Monday-only rule.
+- Recurring weekly meal/workout routines, with one active and one pending version. The first CSV data row anchors the next start in the device timezone, captured on each routine version at import; no fixed Monday-only rule.
 - Strict, all-or-nothing CSV validation and preview, using the same contract the generated LLM prompts request.
 - Actual workout values, final-set recording, **60-second default rest**, timed HIT and recovery of an already-loaded workout while offline.
 - Free-text meal-consumption history, separate from the scheduled meal plan; no automatic meal nutrition calculation.
@@ -72,7 +72,7 @@ Vercel is configured to run `npm run build` and serve `dist/`. Configure environ
 - Monthly photo galleries, four primary angles, same-angle comparisons and honest handling of unavailable sensors.
 - Exam date required before upload, timestamp-prefixed filenames, and matching download/prompt attachment names.
 - Manual LLM workflow: review/copy the prompt, attach exams with the exact referenced names yourself, then import returned CSV. Defaults include actual meals/workouts for 30 days, measurements for 90 days and all exams from the last 12 months by examination date.
-- In-app reminders plus separately opted-in Web Push. Photo pushes default to 8:00 AM in the profile timezone, once daily for one week while incomplete; the internal reminder lasts until the current month's four photos are complete. The start of that one-week window remains an explicit open decision.
+- In-app reminders plus separately opted-in Web Push. Photo pushes default to 8:00 AM in the device timezone, once daily for one week while incomplete; the internal reminder lasts until the current month's four photos are complete. The start of that one-week window remains an explicit open decision.
 
 ## CSV import: current interface and target contract
 

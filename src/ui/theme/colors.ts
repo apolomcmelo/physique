@@ -6,6 +6,7 @@ export const Colors = {
     surfaceElevated: '#252A34',
     surfaceHighest: '#30353F',
     border: '#3B4A3D',
+    borderSubtle: 'rgba(59, 74, 61, 0.4)',
     outline: '#859585',
     primary: '#75FF9E',
     primaryLight: '#00E676',

@@ -4,68 +4,73 @@ import {
     ActivityIndicator,
     ScrollView,
     StyleSheet,
+    useWindowDimensions,
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MealPlanEntry } from '../../src/domain/entities/MealPlan';
-import { User } from '../../src/domain/entities/User';
 import { WeightRecord } from '../../src/domain/entities/WeightRecord';
 import { calculateWeightGoalProgress, selectWeightBaseline, selectWeightGoal, WeightGoal } from '../../src/domain/entities/WeightGoal';
 import { Workout } from '../../src/domain/entities/Workout';
 import { getItem } from '../../src/adapters/local/LocalStorage';
 import { getNextMeal } from '../../src/domain/use-cases/meal/GetNextMeal';
 import { getNextScheduledWorkout, getNextWorkout } from '../../src/domain/use-cases/workout/GetNextWorkout';
-import { Button } from '../../src/ui/components/Button';
-import { Card } from '../../src/ui/components/Card';
-import { ProgressBar } from '../../src/ui/components/ProgressBar';
+import { CompositionCard } from '../../src/ui/components/dashboard/CompositionCard';
+import { NextMealCard } from '../../src/ui/components/dashboard/NextMealCard';
+import { NextWorkoutCard } from '../../src/ui/components/dashboard/NextWorkoutCard';
+import { WaterReminder } from '../../src/ui/components/dashboard/WaterReminder';
+import { WeightGoalCard } from '../../src/ui/components/dashboard/WeightGoalCard';
 import { Typography as TypographyText } from '../../src/ui/components/Typography';
 import { WorkoutDetailModal } from '../../src/ui/components/WorkoutDetailModal';
 import { useRepositories } from '../../src/ui/hooks/useSupabase';
+import { isWideLayout } from '../../src/ui/navigation/tabConfig';
 import { Colors, Spacing } from '../../src/ui/theme';
 
-export default function DashboardScreen() {
-    const { userRepo, workoutRepo, mealRepo, weightRepo, weightGoalRepo } = useRepositories();
+const SPLIT_METRICS_MIN_WIDTH = 1024;
+const CONTENT_MAX_WIDTH = 1440;
 
-    const [user, setUser] = useState<User | null>(null);
-    const [latestWeight, setLatestWeight] = useState<WeightRecord | null>(null);
+function newestFirst(records: WeightRecord[], hasValue: (record: WeightRecord) => boolean): WeightRecord[] {
+    return records.filter(hasValue).sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
+}
+
+export default function DashboardScreen() {
+    const { workoutRepo, mealRepo, weightRepo, weightGoalRepo } = useRepositories();
+    const { width } = useWindowDimensions();
+    const wide = isWideLayout(width);
+    const splitMetrics = width >= SPLIT_METRICS_MIN_WIDTH;
+
     const [weightRecords, setWeightRecords] = useState<WeightRecord[]>([]);
     const [weightGoals, setWeightGoals] = useState<WeightGoal[]>([]);
     const [nextWorkout, setNextWorkout] = useState<Workout | null>(null);
     const [fallbackWorkout, setFallbackWorkout] = useState<Workout | null>(null);
     const [nextMeal, setNextMeal] = useState<MealPlanEntry | null>(null);
+    const [now, setNow] = useState(() => new Date());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
 
-    const [waterPhase, setWaterPhase] = useState<'remind' | 'done'>('remind');
+    const [waterConfirmed, setWaterConfirmed] = useState(false);
     const waterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const [waterIntervalMs, setWaterIntervalMs] = useState(60 * 60 * 1000); // default 1h
+    const [waterIntervalMs, setWaterIntervalMs] = useState(60 * 60 * 1000);
 
     useFocusEffect(useCallback(() => {
         async function load() {
             try {
                 setLoading(true);
-                const [u, weights, goals, meals] = await Promise.all([
-                    userRepo.getUser(),
+                const [weights, goals, meals] = await Promise.all([
                     weightRepo.getWeightHistory(),
                     weightGoalRepo.getWeightGoals(),
                     mealRepo.getMealPlanEntries(),
                 ]);
-                const latest = weights.filter((record) => record.weightKg !== null)
-                    .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())[0] ?? null;
-                setUser(u);
                 setWeightRecords(weights);
                 setWeightGoals(goals);
-                setLatestWeight(latest);
 
-                const now = new Date();
-                const [nw, nm] = await Promise.all([
-                    getNextWorkout(workoutRepo, now),
-                    Promise.resolve(getNextMeal(meals, now)),
-                ]);
+                const loadedAt = new Date();
+                setNow(loadedAt);
+                const nw = await getNextWorkout(workoutRepo, loadedAt);
                 setNextWorkout(nw);
-                setNextMeal(nm);
-                setFallbackWorkout(nw ? null : await getNextScheduledWorkout(workoutRepo, now));
+                setNextMeal(getNextMeal(meals, loadedAt));
+                setFallbackWorkout(nw ? null : await getNextScheduledWorkout(workoutRepo, loadedAt));
 
                 const savedInterval = await getItem<number>('water_reminder_interval_ms');
                 if (savedInterval && savedInterval > 0) {
@@ -85,48 +90,27 @@ export default function DashboardScreen() {
     }, []);
 
     function handleDrankWater() {
-        setWaterPhase('done');
+        setWaterConfirmed(true);
         if (waterTimerRef.current) clearTimeout(waterTimerRef.current);
-        waterTimerRef.current = setTimeout(() => {
-            setWaterPhase('remind');
-        }, waterIntervalMs);
+        waterTimerRef.current = setTimeout(() => setWaterConfirmed(false), waterIntervalMs);
     }
 
-    function formatMinutesUntil(date: Date): string {
-        const diff = Math.round((date.getTime() - Date.now()) / 60000);
-        if (diff === 0) return 'Agora';
-        if (diff < 0) return `Há ${Math.abs(diff)} minutos`;
-        if (diff < 60) return `Em ${diff} minutos`;
-        const h = Math.floor(diff / 60);
-        const m = diff % 60;
-        return `Em ${h}h${m > 0 ? ` ${m}min` : ''}`;
+    function openNextWorkout() {
+        const workout = nextWorkout ?? fallbackWorkout;
+        if (workout) setSelectedWorkout(workout);
+        else router.push('/workout');
     }
 
-    function timeToMinutesLocal(time: string): number {
-        const [h, m] = time.split(':').map(Number);
-        return (h ?? 0) * 60 + (m ?? 0);
-    }
-
-    function formatMealTime(time: string): string {
-        const now = new Date();
-        const currentMin = now.getHours() * 60 + now.getMinutes();
-        const mealMin = timeToMinutesLocal(time);
-        const diff = mealMin - currentMin;
-        if (diff <= 0) return time;
-        if (diff < 60) return `Em ${diff} minutos`;
-        const h = Math.floor(diff / 60);
-        const m = diff % 60;
-        return `Em ${h}h${m > 0 ? ` ${m}min` : ''}`;
-    }
-
-    const currentWeight = latestWeight?.weightKg ?? null;
+    const weights = newestFirst(weightRecords, (record) => record.weightKg !== null);
+    const latestWeight = weights[0] ?? null;
+    const previousWeightKg = weights[1]?.weightKg ?? null;
+    const latestBodyFat = newestFirst(weightRecords, (record) => record.bodyFatPercentage !== null)[0] ?? null;
+    const latestProtein = newestFirst(weightRecords, (record) => record.proteinPercentage !== null)[0] ?? null;
     const activeGoal = selectWeightGoal(weightGoals);
-    const goalWeight = activeGoal?.targetWeightKg ?? null;
     const baselineWeight = activeGoal ? selectWeightBaseline(weightRecords, activeGoal)?.weightKg ?? null : null;
     const goalProgress = activeGoal
-        ? calculateWeightGoalProgress(currentWeight, activeGoal, baselineWeight)
+        ? calculateWeightGoalProgress(latestWeight?.weightKg ?? null, activeGoal, baselineWeight)
         : null;
-    const weightDelta = currentWeight !== null && goalWeight !== null ? currentWeight - goalWeight : null;
 
     if (loading) {
         return (
@@ -140,134 +124,55 @@ export default function DashboardScreen() {
         <SafeAreaView style={styles.safe}>
             <ScrollView
                 style={styles.container}
-                contentContainerStyle={styles.content}
+                contentContainerStyle={[styles.content, { paddingHorizontal: wide ? 40 : Spacing.md }]}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Header */}
-                <View style={styles.header}>
-                    <TypographyText variant="h1" color={Colors.textPrimary}>
-                        Physique
-                    </TypographyText>
-                    <TypographyText variant="body" color={Colors.textSecondary}>
-                        {user ? `Olá, ${user.name.split(' ')[0]}!` : 'Bem-vindo!'}
-                    </TypographyText>
+                <View style={[styles.header, wide && styles.headerWide]}>
+                    <View>
+                        <TypographyText variant="title">Visão Geral</TypographyText>
+                        <TypographyText variant="bodySmall" color={Colors.outline}>
+                            Acompanhamento diário essencial e metas ativas.
+                        </TypographyText>
+                    </View>
+                    <WaterReminder confirmed={waterConfirmed} onConfirm={handleDrankWater} />
                 </View>
 
                 {error && (
-                    <TypographyText variant="body" color={Colors.error} style={{ marginBottom: Spacing.md }}>
+                    <TypographyText variant="body" color={Colors.error}>
                         {error}
                     </TypographyText>
                 )}
 
-                {/* Weight Card */}
-                <Card style={styles.card} onPress={() => nextWorkout && setSelectedWorkout(nextWorkout)}>
-                    <TypographyText variant="label" color={Colors.textSecondary}>
-                        PESO
-                    </TypographyText>
-                    <View style={styles.weightRow}>
-                        <TypographyText variant="h2" color={Colors.textPrimary}>
-                            {currentWeight !== null ? `${currentWeight.toLocaleString('pt-BR')} kg` : '— kg'}
-                        </TypographyText>
-                        {goalWeight !== null && (
-                            <TypographyText variant="body" color={Colors.textSecondary}>
-                                Objetivo: {goalWeight.toLocaleString('pt-BR')} kg
-                            </TypographyText>
-                        )}
-                    </View>
-                    {latestWeight && (
-                        <TypographyText variant="bodySmall" color={Colors.textSecondary}>
-                            Medido em {latestWeight.recordedAt.toLocaleDateString('pt-BR')}
-                        </TypographyText>
-                    )}
-                    {weightDelta !== null && weightDelta !== 0 && (
-                        <TypographyText variant="bodySmall" color={weightDelta > 0 ? Colors.warning : Colors.success}>
-                            {weightDelta > 0 ? '▼' : '▲'} {Math.abs(weightDelta).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg para o objetivo
-                        </TypographyText>
-                    )}
-                    {activeGoal && goalProgress && (
-                        <View style={{ marginTop: Spacing.sm }}>
-                            <ProgressBar current={goalProgress.progress * 100} goal={100} showPercentage />
-                        </View>
-                    )}
-                    {activeGoal && !goalProgress && (
-                        <TypographyText variant="bodySmall" color={Colors.textSecondary} style={{ marginTop: Spacing.sm }}>
-                            Progresso indisponível: registre uma medição de peso na data de início da meta ou antes.
-                        </TypographyText>
-                    )}
-                </Card>
+                <View testID="dashboard-metrics-row" style={[styles.row, { flexDirection: splitMetrics ? 'row' : 'column' }]}>
+                    <WeightGoalCard
+                        latestWeight={latestWeight}
+                        previousWeightKg={previousWeightKg}
+                        goal={activeGoal}
+                        progress={goalProgress}
+                        style={splitMetrics ? { flex: 7 } : undefined}
+                    />
+                    <CompositionCard
+                        bodyFat={latestBodyFat}
+                        protein={latestProtein}
+                        onOpenHistory={() => router.push('/history')}
+                        style={splitMetrics ? { flex: 5 } : undefined}
+                    />
+                </View>
 
-                {/* Next Workout Card */}
-                <Card style={styles.card} onPress={() => nextWorkout && setSelectedWorkout(nextWorkout)}>
-                    <TypographyText variant="label" color={Colors.textSecondary}>
-                        PRÓXIMO TREINO
-                    </TypographyText>
-                    {nextWorkout ? (
-                        <View style={{ marginTop: Spacing.xs }}>
-                            <TypographyText variant="h3" color={Colors.textPrimary}>
-                                {nextWorkout.name}
-                            </TypographyText>
-                            {nextWorkout.scheduledAt && (
-                                <TypographyText variant="body" color={Colors.primary}>
-                                    {formatMinutesUntil(nextWorkout.scheduledAt)} — {nextWorkout.type}
-                                </TypographyText>
-                            )}
-                            <TypographyText variant="bodySmall" color={Colors.textSecondary}>
-                                {nextWorkout.exercises.length} exercícios
-                            </TypographyText>
-                        </View>
-                    ) : (
-                        <View style={{ marginTop: Spacing.xs }}>
-                            <TypographyText variant="body" color={Colors.textDisabled}>
-                                Nenhum treino na próxima hora
-                            </TypographyText>
-                            {fallbackWorkout?.scheduledAt && (
-                                <TypographyText variant="bodySmall" color={Colors.textSecondary}>
-                                    Próximo: {fallbackWorkout.name} em {fallbackWorkout.scheduledAt.toLocaleDateString('pt-BR')} às {fallbackWorkout.scheduledAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                </TypographyText>
-                            )}
-                        </View>
-                    )}
-                </Card>
-
-                {/* Next Meal Card */}
-                <Card style={styles.card}>
-                    <TypographyText variant="label" color={Colors.textSecondary}>
-                        PRÓXIMA REFEIÇÃO
-                    </TypographyText>
-                    {nextMeal ? (
-                        <View style={{ marginTop: Spacing.xs }}>
-                            <TypographyText variant="h4" color={Colors.textPrimary}>
-                                {nextMeal.activity}
-                            </TypographyText>
-                            <TypographyText variant="body" color={Colors.primary}>
-                                {formatMealTime(nextMeal.time)}
-                            </TypographyText>
-                            <TypographyText variant="bodySmall" color={Colors.textSecondary}>
-                                {nextMeal.description}
-                            </TypographyText>
-                        </View>
-                    ) : (
-                        <TypographyText variant="body" color={Colors.textDisabled} style={{ marginTop: Spacing.xs }}>
-                            Nenhuma refeição agendada para hoje
-                        </TypographyText>
-                    )}
-                </Card>
-
-                {/* Water Reminder Card */}
-                <Card style={styles.card}>
-                    <TypographyText variant="h4" color={Colors.textPrimary}>
-                        💧 {waterPhase === 'remind' ? 'Já bebeu água hoje? 🥺' : 'Excelente 😌'}
-                    </TypographyText>
-                    {waterPhase === 'remind' && (
-                        <Button
-                            label="Sim"
-                            onPress={handleDrankWater}
-                            variant="secondary"
-                            style={{ marginTop: Spacing.sm }}
-                        />
-                    )}
-                </Card>
-
+                <View testID="dashboard-agenda-row" style={[styles.row, { flexDirection: wide ? 'row' : 'column' }]}>
+                    <NextWorkoutCard
+                        workout={nextWorkout}
+                        fallbackWorkout={fallbackWorkout}
+                        now={now}
+                        onOpen={openNextWorkout}
+                        style={wide ? { flex: 1 } : undefined}
+                    />
+                    <NextMealCard
+                        meal={nextMeal}
+                        onOpen={() => router.push('/nutrition')}
+                        style={wide ? { flex: 1 } : undefined}
+                    />
+                </View>
             </ScrollView>
             <WorkoutDetailModal
                 visible={selectedWorkout !== null}
@@ -285,16 +190,20 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: Colors.background },
     container: { flex: 1 },
-    content: { padding: Spacing.md, gap: Spacing.md },
-    centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
-    header: { marginBottom: Spacing.sm },
-    card: { gap: Spacing.xs },
-    weightRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: Spacing.xs,
-        flexWrap: 'wrap',
-        gap: Spacing.xs,
+    content: {
+        paddingVertical: Spacing.lg,
+        gap: Spacing.lg,
+        width: '100%',
+        maxWidth: CONTENT_MAX_WIDTH,
+        alignSelf: 'center',
     },
+    centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
+    header: {
+        gap: Spacing.sm,
+        paddingBottom: Spacing.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.borderSubtle,
+    },
+    headerWide: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    row: { gap: Spacing.md },
 });

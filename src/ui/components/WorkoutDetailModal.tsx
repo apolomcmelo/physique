@@ -11,6 +11,7 @@ import { Workout, WorkoutType } from '../../domain/entities/Workout';
 import { Button } from './Button';
 import { Typography as TypographyText } from './Typography';
 import { Colors, Radius, Spacing, Typography } from '../theme';
+import { WORKOUT_TYPE_LABEL } from '../utils/workoutTypeLabel';
 
 interface WorkoutDetailModalProps {
     visible: boolean;
@@ -19,12 +20,6 @@ interface WorkoutDetailModalProps {
     onEdit?: (workout: Workout) => void;
     onStart?: (workout: Workout) => void;
 }
-
-const TYPE_LABEL: Record<WorkoutType, string> = {
-    HIT: 'HIT',
-    Calisthenics: 'Calistenia',
-    Weightlifting: 'Musculação',
-};
 
 const TYPE_COLOR: Record<WorkoutType, string> = {
     HIT: Colors.error,
@@ -87,7 +82,7 @@ export function WorkoutDetailModal({
                             </TypographyText>
                             <View style={styles.metaRow}>
                                 <View style={[styles.typeBadge, { borderColor: typeColor, backgroundColor: `${typeColor}22` }]}>
-                                    <Text style={[Typography.label, { color: typeColor }]}>{TYPE_LABEL[workout.type]}</Text>
+                                    <Text style={[Typography.label, { color: typeColor }]}>{WORKOUT_TYPE_LABEL[workout.type]}</Text>
                                 </View>
                                 <TypographyText variant="bodySmall" color={Colors.textSecondary}>
                                     {formatSchedule(workout.scheduledAt)}

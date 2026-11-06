@@ -11,12 +11,14 @@ interface CardProps {
     children: React.ReactNode;
     style?: ViewStyle;
     onPress?: () => void;
+    testID?: string;
 }
 
-export const Card = ({ children, style, onPress }: CardProps) => {
+export const Card = ({ children, style, onPress, testID }: CardProps) => {
     if (onPress) {
         return (
             <TouchableOpacity
+                testID={testID}
                 style={[styles.card, style]}
                 onPress={onPress}
                 activeOpacity={0.75}
@@ -26,13 +28,15 @@ export const Card = ({ children, style, onPress }: CardProps) => {
         );
     }
 
-    return <View style={[styles.card, style]}>{children}</View>;
+    return <View testID={testID} style={[styles.card, style]}>{children}</View>;
 };
 
 const styles = StyleSheet.create({
     card: {
         backgroundColor: Colors.surface,
         borderRadius: Radius.md,
+        borderWidth: 1,
+        borderColor: Colors.borderSubtle,
         padding: Spacing.md,
     },
 });

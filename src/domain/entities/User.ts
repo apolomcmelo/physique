@@ -10,25 +10,11 @@ export interface User {
     bodyFatPercentage: number | null;
     proteinPercentage: number | null;
     objective: string;
-    timezone?: string;
     createdAt: Date;
     updatedAt: Date;
 }
 
 export type CreateUserParams = Omit<User, 'id' | 'createdAt' | 'updatedAt'>;
-
-export function getDeviceTimezone(): string {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-}
-
-export function isValidTimezone(timezone: string): boolean {
-    try {
-        new Intl.DateTimeFormat('en-US', { timeZone: timezone });
-        return true;
-    } catch {
-        return false;
-    }
-}
 
 export function calculateAge(dateOfBirth: Date, referenceDate: Date = new Date()): number {
     const birth = new Date(dateOfBirth);
@@ -79,14 +65,10 @@ export function createUser(params: CreateUserParams): User {
         && (!Number.isFinite(params.proteinPercentage) || params.proteinPercentage < 0 || params.proteinPercentage > 100)) {
         throw new Error('Protein percentage must be between 0 and 100');
     }
-    if (!isValidTimezone(params.timezone ?? getDeviceTimezone())) {
-        throw new Error('Timezone must be a valid IANA timezone');
-    }
 
     const now = new Date();
     return {
         ...params,
-        timezone: params.timezone ?? getDeviceTimezone(),
         id: generateId(),
         createdAt: now,
         updatedAt: now,

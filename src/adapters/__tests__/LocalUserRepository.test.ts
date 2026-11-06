@@ -44,4 +44,12 @@ describe('LocalUserRepository', () => {
             await expect(repo.getCurrentUserId()).resolves.toBeNull();
         });
     });
+
+    describe('getUser()', () => {
+        it('drops a time zone stored by an older app version', async () => {
+            mockGetItem.mockResolvedValue({ ...storedUser, timezone: 'Europe/Lisbon' });
+
+            await expect(repo.getUser()).resolves.not.toHaveProperty('timezone');
+        });
+    });
 });

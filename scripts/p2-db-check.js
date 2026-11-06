@@ -22,7 +22,7 @@ async function main() {
         const a = '11111111-1111-4111-8111-111111111111';
         const b = '22222222-2222-4222-8222-222222222222';
         await db.query('insert into auth.users(id) values($1),($2)', [a,b]);
-        assert.equal((await db.query("select count(*)::integer as n from information_schema.columns where table_name='user_profiles' and column_name='timezone'")).rows[0].n,1);
+        assert.equal((await db.query("select count(*)::integer as n from information_schema.columns where table_name='user_profiles' and column_name='timezone'")).rows[0].n,0);
         await db.query('grant usage on schema public,auth to authenticated; grant all on all tables in schema public to authenticated');
         await db.query('set role authenticated');
         await db.query("select set_config('request.jwt.claim.sub',$1,false)",[a]);

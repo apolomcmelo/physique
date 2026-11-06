@@ -17,7 +17,7 @@ Todos os grupos funcionais originais continuam no escopo. As decisões abaixo su
 - Prompts em inglês, com instrução explícita para o LLM devolver o conteúdo do plano e as recomendações em português.
 - Preferência por Dark Mode, legibilidade, acessibilidade e layouts responsivos. Reutilizar os componentes e melhorias de UX compatíveis já existentes.
 - TDD para regras de domínio, com ciclo red-green; testes de integração/componentes onde necessários para verificar comportamento. Nomes claros, funções pequenas, evitar duplicação e usar bibliotecas adequadas em vez de reimplementar capacidades disponíveis.
-- Configurar um fuso horário no perfil, inicialmente sugerido pelo dispositivo. A rotina usa esse fuso; viagens não o alteram silenciosamente. Preservar o instante e o contexto temporal dos registros históricos.
+- Não há fuso horário no perfil. A rotina usa o fuso do dispositivo, capturado em cada versão de rotina no momento da importação; viagens não alteram silenciosamente versões já importadas. Preservar o instante e o contexto temporal dos registros históricos.
 
 ## 2. Perfil, medições e objetivos — MED
 
@@ -33,7 +33,7 @@ Todos os grupos funcionais originais continuam no escopo. As decisões abaixo su
 
 - Uma rotina contém refeições e treinos semanais recorrentes, mantidos até substituição.
 - Manter uma rotina ativa e, no máximo, uma substituição pendente por usuário. Mostrar claramente a versão visualizada e sua data/hora de início.
-- A **primeira linha de dados do CSV** define o ponto inicial semanal. Comparar seu dia da semana e horário com o instante atual no fuso do perfil para encontrar a próxima ocorrência de início.
+- A **primeira linha de dados do CSV** define o ponto inicial semanal. Comparar seu dia da semana e horário com o instante atual no fuso do dispositivo para encontrar a próxima ocorrência de início.
 - Exemplos: início na quarta-feira, importado na terça, começa na quarta seguinte; importado na quinta, começa na quarta da próxima semana. Na quarta às 09:00, início às 10:00 começa hoje; início às 06:00 já passou e começa na próxima quarta.
 - Esta regra substitui a proposta de ativar sempre na segunda-feira e a comparação com a primeira atividade da rotina antiga. A igualdade exata entre horário inicial e instante atual ainda está em aberto (O1).
 - Aplicar a mesma política temporal às edições. Editar somente a versão visualizada, sem propagar mudanças silenciosamente para outra versão. A identificação do ponto inicial em uma edição e a confirmação após expirar uma prévia precisam ser especificadas (O2).
@@ -144,12 +144,12 @@ Todos os grupos funcionais originais continuam no escopo. As decisões abaixo su
 
 - Exibir peso atual, meta/progresso, próximo treino, próxima refeição e lembrete de água.
 - Treino em andamento tem prioridade. Caso contrário, manter treino ainda não concluído visível por até 60 minutos após o agendamento. Preservar a informação do próximo agendamento fora da janela, sem esconder treinos futuros.
-- Próxima refeição respeita dia e horário no fuso do perfil, incluindo o dia seguinte quando não houver mais refeições hoje.
+- Próxima refeição respeita dia e horário no fuso da versão de rotina, incluindo o dia seguinte quando não houver mais refeições hoje.
 - Hidratação: lembrete diário gentil e dispensável, com “Já bebi água”. Não é controle de volumes nem uma meta de ingestão.
 - Lembretes internos são a base: avisar treino a iniciar em até 15 minutos enquanto o usuário está em outra tela; lembrar dispensa por ocorrência.
 - Fotos: a partir do início do mês, manter lembrete interno dos ângulos faltantes até completar o mês. Ao mudar de mês, focar o mês atual; meses antigos incompletos permanecem na galeria.
 - Web Push é opcional, com opt-ins separados para treinos e fotos. Explicar instalação/permissões necessárias, sem bloquear outros recursos.
-- **Push de fotos: uma vez por dia durante uma semana, às 08:00 por padrão no fuso do perfil**, enquanto o mês estiver incompleto; parar quando as quatro principais estiverem presentes. O início exato da semana ainda precisa de confirmação (O5). O lembrete interno continua depois dessa semana enquanto necessário.
+- **Push de fotos: uma vez por dia durante uma semana, às 08:00 por padrão no fuso do dispositivo**, enquanto o mês estiver incompleto; parar quando as quatro principais estiverem presentes. O início exato da semana ainda precisa de confirmação (O5). O lembrete interno continua depois dessa semana enquanto necessário.
 - Não garantir entrega pontual de push ou som com tela bloqueada. Deduplicar notificações e não cancelar lembretes de outra categoria ao atualizar fotos.
 
 ## 13. Histórico, exclusão e isolamento — HIS
@@ -165,11 +165,11 @@ Esses pontos não impedem documentar o acordo, mas devem ser resolvidos antes do
 
 | ID | Decisão pendente | Trabalho afetado |
 |---|---|---|
-| O1 | Ativação no instante exatamente igual ao início; resolução de horário inexistente/duplicado em mudança de horário de verão; efeito de mudar fuso sobre agenda futura. | ROT, LEM |
+| O1 | Ativação no instante exatamente igual ao início; resolução de horário inexistente/duplicado em mudança de horário de verão; efeito de mudar o fuso do dispositivo sobre agenda futura. | ROT, LEM |
 | O2 | Ponto inicial preservado/recalculado em edição; mapeamento das outras linhas no ciclo ancorado na primeira; corte preciso entre versões e revalidação quando a prévia expira. | ROT, CSV |
 | O3 | Formalizar gramática completa: limites numéricos, campos vazios, aliases, faixas/alternativas, unidade/precisão e rejeição de atividades ambíguas. HIT já está resolvido como uma série de duração definida. | CSV, TRE, LLM |
 | O4 | Ações de resolução de duas sessões concorrentes e tratamento de conflito com exclusão/correção feita em outro dispositivo. Preservar ambas até decisão já está acordado. | OFF, HIS |
-| O5 | Push de fotos: semana começa no dia 1 ou no opt-in? Horário padrão já definido: 08:00 no fuso do perfil. Treinos: frequência de push e política de atraso/reagendamento/dispensa. Persistência entre dispositivos da confirmação de água. | LEM |
+| O5 | Push de fotos: semana começa no dia 1 ou no opt-in? Horário padrão já definido: 08:00 no fuso do dispositivo. Treinos: frequência de push e política de atraso/reagendamento/dispensa. Persistência entre dispositivos da confirmação de água. | LEM |
 | O6 | Fronteiras inclusivas e relógio de referência dos últimos 12 meses, 30 dias e 90 dias; limites de tamanho do prompt e mensagens ao atingir limites gratuitos. | EXA, LLM, BASE |
 
 ## 15. Limites de plataforma documentados

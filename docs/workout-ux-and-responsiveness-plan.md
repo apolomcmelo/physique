@@ -64,7 +64,7 @@ Paths: `src/domain/use-cases/workout/ParseCsvWorkouts.ts`, `src/domain/use-cases
 - [ ] Use one tested CSV/prescription contract in prompt generation and import validation. Include quoted semicolons/escaped quotes and row-number diagnostics.
 - [ ] Fix standalone `1:20min`, weight followed by rest annotation and rest segment assigned to the preceding exercise.
 - [ ] Reject malformed/unknown workout prescriptions. Do not silently skip or accept as notes-only; HIT now has an explicit timed-set representation.
-- [ ] First CSV data row anchors the recurring week in the profile timezone; compute the next start relative to now, not a fixed Monday.
+- [ ] First CSV data row anchors the recurring week in the device timezone captured at import; compute the next start relative to now, not a fixed Monday.
 - [ ] Keep one active and one pending routine, preview replacements and apply the agreed activation policy to edits of the viewed version only.
 - [ ] Preserve active-session snapshots and historical occurrences through replacements. Make writes recoverable/idempotent rather than sequential partial updates.
 

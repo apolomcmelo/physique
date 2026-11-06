@@ -3,7 +3,7 @@ import { Text, StyleSheet, TextStyle } from 'react-native';
 import { Typography as TypographyStyles } from '../theme/typography';
 import { Colors } from '../theme/colors';
 
-type Variant = 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'bodySmall' | 'label' | 'mono';
+type Variant = keyof typeof TypographyStyles;
 
 interface TypographyProps {
     variant?: Variant;

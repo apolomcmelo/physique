@@ -50,7 +50,7 @@ test.describe('authenticated user flows', () => {
 
     test('opens every primary tab and shows empty states', async ({ page }) => {
         await page.goto('/', { waitUntil: 'domcontentloaded' });
-        await expect(page.getByText('Physique', { exact: true })).toBeVisible();
+        await expect(page.getByText('Visão Geral', { exact: true })).toBeVisible();
         await page.screenshot({ path: 'docs/e2e-dashboard.png', fullPage: true });
 
         const tabs = [
@@ -59,7 +59,7 @@ test.describe('authenticated user flows', () => {
             { label: 'Treinos', content: 'Sem treinos' },
             { label: 'Histórico', content: 'Sem registros' },
             { label: 'Perfil', content: 'Data de Nascimento' },
-            { label: 'Dashboard', content: 'Physique' },
+            { label: 'Dashboard', content: 'Visão Geral' },
         ];
 
         for (const tab of tabs) {
@@ -78,7 +78,7 @@ test.describe('authenticated user flows', () => {
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-        await expect(page.getByText('Physique', { exact: true })).toBeVisible();
+        await expect(page.getByText('Visão Geral', { exact: true })).toBeVisible();
         const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
         expect(documentWidth).toBeLessThanOrEqual(390);
     });
@@ -93,7 +93,6 @@ test.describe('authenticated user flows', () => {
         await page.getByPlaceholder('20', { exact: true }).fill('18,5');
         await page.getByPlaceholder('22').fill('20,5');
         await page.getByPlaceholder('Ex: Perder gordura e ganhar massa').fill('Saúde e condicionamento');
-        await page.getByPlaceholder('America/Sao_Paulo').fill('America/Sao_Paulo');
         await page.getByText('Salvar Perfil', { exact: true }).click();
 
         await expect(page.getByText('E2E Athlete', { exact: true })).toBeVisible();
@@ -102,15 +101,13 @@ test.describe('authenticated user flows', () => {
         await expect(page.getByText('70,5 kg', { exact: true })).toBeVisible();
         await expect(page.getByText('18,5%', { exact: true })).toBeVisible();
         await expect(page.getByText('20,5%', { exact: true })).toBeVisible();
-        await expect(page.getByText('Fuso horário', { exact: true })).toBeVisible();
-        await expect(page.getByText('America/Sao_Paulo', { exact: true })).toBeVisible();
         await page.screenshot({ path: 'docs/e2e-profile.png', fullPage: true });
         await page.reload();
         await expect(page.getByText('E2E Athlete', { exact: true })).toBeVisible();
-        await expect(page.getByText('America/Sao_Paulo', { exact: true })).toBeVisible();
         await page.goto('/');
-        await expect(page.getByText('75,5 kg', { exact: true })).toBeVisible();
-        await expect(page.getByText(/Objetivo: 70,5 kg/)).toBeVisible();
+        await expect(page.getByText('75,5', { exact: true })).toBeVisible();
+        await expect(page.getByText('Meta final', { exact: true })).toBeVisible();
+        await expect(page.getByText('70,5', { exact: true })).toBeVisible();
         await expect(page.getByText('Progresso indisponível: registre uma medição de peso na data de início da meta ou antes.', { exact: true })).toHaveCount(0);
 
         await page.goto('/settings');
@@ -133,7 +130,7 @@ test.describe('authenticated user flows', () => {
         await expect(page.getByText('E2E Sem Baseline', { exact: true })).toBeVisible();
         await page.goto('/');
         await expect(page.getByText('Progresso indisponível: registre uma medição de peso na data de início da meta ou antes.', { exact: true })).toBeVisible();
-        await expect(page.getByText('— kg', { exact: true })).toBeVisible();
+        await expect(page.getByText('Nenhuma aferição registrada', { exact: true })).toBeVisible();
     });
 
     test('previews and cancels a routine CSV import without saving', async ({ page }) => {
@@ -382,7 +379,7 @@ test.describe('authenticated user flows', () => {
 
     test('shows missing nutrition values as incomplete, not zero', async ({ page }) => {
         await page.goto('/', { waitUntil: 'domcontentloaded' });
-        await expect(page.getByText('Physique', { exact: true })).toBeVisible();
+        await expect(page.getByText('Visão Geral', { exact: true })).toBeVisible();
         await page.goto('/food/scan', { waitUntil: 'networkidle' });
         await expect(page.getByText('Importar Alimento', { exact: true })).toBeVisible();
         const nameInput = page.getByPlaceholder('ex: Aveia Quaker');
@@ -423,18 +420,18 @@ test.describe('authenticated user flows', () => {
         await expect(page.getByText('Proteína: 20,5%', { exact: true })).toBeVisible();
     });
 
-    test('persists the profile timezone', async ({ page }) => {
+    test('saves a profile without asking for a time zone', async ({ page }) => {
         await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-        await page.getByPlaceholder('Seu nome').fill('E2E Timezone');
+        await page.getByPlaceholder('Seu nome').fill('E2E Sem Fuso');
+        await expect(page.getByText(/Fuso horário/)).toHaveCount(0);
+        await expect(page.getByPlaceholder('America/Sao_Paulo')).toHaveCount(0);
         await page.getByPlaceholder('DD/MM/AAAA').first().fill('01011990');
         await page.getByPlaceholder('175').fill('175');
         await page.getByPlaceholder('70', { exact: true }).fill('70');
         await page.getByPlaceholder('Ex: Perder gordura e ganhar massa').fill('Saúde');
-        await page.getByPlaceholder('America/Sao_Paulo').fill('Pacific/Auckland');
         await page.getByText('Salvar Perfil', { exact: true }).click();
-        await expect(page.getByText('Pacific/Auckland', { exact: true })).toBeVisible();
-        await page.reload();
-        await expect(page.getByText('Pacific/Auckland', { exact: true })).toBeVisible();
+        await expect(page.getByText('E2E Sem Fuso', { exact: true })).toBeVisible();
+        await expect(page.getByText(/Fuso horário/)).toHaveCount(0);
     });
 
     test('records, corrects, and deletes an independent body-fat measurement', async ({ page }) => {

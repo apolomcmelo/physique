@@ -1,4 +1,4 @@
-import { getDeviceTimezone, User } from '../../domain/entities/User';
+import { User } from '../../domain/entities/User';
 import { IUserRepository } from '../../domain/ports/UserRepository';
 import { getItem, setItem } from './LocalStorage';
 
@@ -11,11 +11,11 @@ export class LocalUserRepository implements IUserRepository {
     }
 
     async getUser(): Promise<User | null> {
-        const raw = await getItem<User>(KEY);
-        if (!raw) return null;
+        const stored = await getItem<User & { timezone?: string }>(KEY);
+        if (!stored) return null;
+        const { timezone: _legacyTimezone, ...raw } = stored;
         return {
             ...raw,
-            timezone: raw.timezone ?? getDeviceTimezone(),
             dateOfBirth: new Date(raw.dateOfBirth),
             createdAt: new Date(raw.createdAt),
             updatedAt: new Date(raw.updatedAt),

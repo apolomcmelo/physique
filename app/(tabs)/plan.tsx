@@ -25,6 +25,7 @@ import { router } from 'expo-router';
 import { readRoutineCsv } from '../../src/domain/use-cases/routine/ReadRoutineCsv';
 import { validateRoutineCsv, RoutinePreview } from '../../src/domain/use-cases/routine/ValidateRoutineCsv';
 import { proposeRoutine, RoutineProposal, RoutineState, visibleRoutine } from '../../src/domain/use-cases/routine/RoutineVersions';
+import { getDeviceTimezone } from '../../src/domain/value-objects/Timezone';
 import { LocalRoutineRepository } from '../../src/adapters/local/LocalRoutineRepository';
 import { SupabaseRoutineRepository } from '../../src/adapters/supabase/SupabaseRoutineRepository';
 import { Input } from '../../src/ui/components/Input';
@@ -295,9 +296,9 @@ export default function PlanScreen() {
 
             readRoutineCsv(csvContent);
             const plan = validateRoutineCsv(csvContent);
-            const timezone = (await userRepo.getUser())?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+            const timezone = getDeviceTimezone();
             const state = await routineRepo.getState();
-            if (state.pending && state.pending.timezone !== timezone) setTimezoneWarning(`Fuso alterado para ${timezone}. Revalide a agenda pendente.`);
+            if (state.pending && state.pending.timezone !== timezone) setTimezoneWarning(`Fuso do dispositivo alterado para ${timezone}. Revalide a agenda pendente.`);
             else setTimezoneWarning(null);
             const proposal = proposeRoutine(state, plan, csvContent, timezone, new Date());
             setPreview({ content: csvContent, plan, proposal, timezone });
@@ -315,7 +316,7 @@ export default function PlanScreen() {
         if (!preview) return;
         try {
             setImporting(true);
-            const timezone = (await userRepo.getUser())?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+            const timezone = getDeviceTimezone();
             if (editingVersion && viewed) {
                 const current = visibleRoutine(await routineRepo.getState(), new Date());
                 const target = current[viewedVersion] ?? current.active ?? current.pending;

@@ -20,6 +20,7 @@ const mockValidateRoutineCsv = jest.fn();
 const mockGetRoutineState = jest.fn(async () => ({ active: null, pending: null }));
 const mockConfirmRoutine = jest.fn(async () => ({ active: null, pending: null }));
 const mockGetUser = jest.fn(async () => ({ timezone: 'UTC' }));
+jest.mock('../../src/domain/value-objects/Timezone', () => ({ getDeviceTimezone: () => 'Asia/Tokyo' }));
 jest.mock('../../src/adapters/supabase/SavePlanImport', () => ({ savePlanImport: (...args: unknown[]) => mockSaveImport(...args) }));
 jest.mock('../../src/adapters/local/SavePlanImport', () => ({ saveLocalPlanImport: (...args: unknown[]) => mockSaveLocalImport(...args) }));
 jest.mock('../../src/domain/use-cases/routine/ReadRoutineCsv', () => ({ readRoutineCsv: (csv: string) => mockReadRoutineCsv(csv) }));
@@ -122,6 +123,23 @@ it('requires a fresh preview after an expired confirmation without writing a rep
     await waitFor(() => screen.getByText(/Prévia expirada/));
     expect(screen.queryByText('Confirmar importação')).toBeNull();
     expect(mockSaveImport).not.toHaveBeenCalled();
+});
+
+it('captures the device time zone on the confirmed routine version, ignoring any legacy profile value', async () => {
+    mockGetDocument.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///plan.csv' }] });
+    mockValidateRoutineCsv.mockReturnValue({ firstRow: { day: 'Segunda-feira', time: '07:00' }, rows: [], meals: [], workouts: [] });
+    mockConfirmRoutine.mockClear();
+    const screen = render(<PlanScreen />);
+    await waitFor(() => screen.getByText('↑ CSV'));
+    fireEvent.press(screen.getByText('↑ CSV'));
+    await waitFor(() => screen.getByText('Confirmar importação'));
+    fireEvent.press(screen.getByText('Confirmar importação'));
+    await waitFor(() => expect(mockConfirmRoutine).toHaveBeenCalled());
+    expect(mockConfirmRoutine).toHaveBeenCalledWith(
+        expect.objectContaining({ version: expect.objectContaining({ timezone: 'Asia/Tokyo' }) }),
+        expect.any(Date),
+        'Asia/Tokyo',
+    );
 });
 
 it('does not save when the user cancels the preview', async () => {
